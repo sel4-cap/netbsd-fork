@@ -44,7 +44,7 @@ typedef struct label_t {	/* Used by setjmp & longjmp */
 } label_t;
 #endif
 
-#if defined(_KERNEL) || defined(_KMEMUSER) || defined(_KERNTYPES) || defined(_STANDALONE)
+#if defined(_KERNEL) || defined(_KMEMUSER) || defined(_KERNTYPES) || defined(_STANDALONE) || defined(SEL4)
 typedef unsigned long	paddr_t;
 typedef unsigned long	psize_t;
 typedef unsigned long	vaddr_t;
@@ -59,7 +59,9 @@ typedef unsigned long	vsize_t;
 #define	VADDR_MAX	ULONG_MAX
 #define	PADDR_MAX	ULONG_MAX
 
+#ifndef SEL4
 typedef int		register_t, register32_t;
+#endif
 #define	PRIxREGISTER	"x"
 
 typedef unsigned short	tlb_asid_t;
@@ -74,7 +76,9 @@ typedef unsigned char	__cpu_simple_lock_nv_t;
 #else
 typedef	int		__cpu_simple_lock_nv_t;
 #endif /* _KERNEL */
+#ifndef SEL4
 typedef	int		__register_t;
+#endif
 
 #define	__SIMPLELOCK_LOCKED	1
 #define	__SIMPLELOCK_UNLOCKED	0

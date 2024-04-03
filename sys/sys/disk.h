@@ -307,7 +307,7 @@ struct disk_sectoralign {
 	uint32_t	dsa_alignment;	  /* sectors per aligned sector */
 };
 
-#ifdef _KERNEL
+#if defined (_KERNEL) || defined (SEL4)
 #include <sys/device.h>
 #include <sys/mutex.h>
 

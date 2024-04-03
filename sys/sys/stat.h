@@ -64,6 +64,7 @@ struct stat {
 	uid_t	  st_uid;		/* user ID of the file's owner */
 	gid_t	  st_gid;		/* group ID of the file's group */
 	dev_t	  st_rdev;		/* device type */
+#ifndef SEL4
 #if (_POSIX_C_SOURCE - 0) >= 200809L || (_XOPEN_SOURCE - 0) >= 700 || \
     defined(_NETBSD_SOURCE)
 	struct	  timespec st_atim;	/* time of last access */
@@ -79,6 +80,7 @@ struct stat {
 	long	  st_ctimensec;		/* nsec of last file status change */
 	time_t	  st_birthtime;		/* time of creation */
 	long	  st_birthtimensec;	/* nsec of time of creation */
+#endif
 #endif
 	off_t	  st_size;		/* file size, in bytes */
 	blkcnt_t  st_blocks;		/* blocks allocated for file */
@@ -279,17 +281,23 @@ int     fstatat(int, const char *, struct stat *, int);
 int     mkdirat(int, const char *, mode_t);
 int     mkfifoat(int, const char *, mode_t);
 int     mknodat(int, const char *, mode_t, dev_t);
+#ifndef SEL4
 int     utimensat(int, const char *, const struct timespec [2], int);
+#endif
 #endif
 
 #ifdef _NETBSD_SOURCE
+#ifndef SEL4
 int utimens(const char *, const struct timespec [2]);
 int lutimens(const char *, const struct timespec [2]);
+#endif
 #endif
 
 #if (_POSIX_C_SOURCE - 0) >= 200809L || (_XOPEN_SOURCE - 0) >= 700 || \
     defined(_NETBSD_SOURCE)
+#ifndef SEL4
 int futimens(int, const struct timespec [2]);
+#endif
 #endif
 #endif
 

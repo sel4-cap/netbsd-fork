@@ -49,8 +49,9 @@
 /*
  * Memory allocation wrappers to handle different environments.
  */
-#if defined(_KERNEL)
+#if defined(_KERNEL) || defined(SEL4)
 #include <sys/kmem.h>
+#define wchar_t char
 #include <sys/systm.h>
 
 static void *

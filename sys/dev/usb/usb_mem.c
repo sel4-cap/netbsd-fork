@@ -53,12 +53,15 @@ __KERNEL_RCSID(0, "$NetBSD: usb_mem.c,v 1.84 2021/12/21 09:51:22 skrll Exp $");
 #include <sys/once.h>
 #include <sys/queue.h>
 #include <sys/systm.h>
+#include <stdio.h>
 
 #include <dev/usb/usb.h>
 #include <dev/usb/usbdi.h>
 #include <dev/usb/usbdivar.h>	/* just for usb_dma_t */
 #include <dev/usb/usbhist.h>
 #include <dev/usb/usb_mem.h>
+#undef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE 64 // SEL4 this is very important
 
 #define	DPRINTF(FMT,A,B,C,D)	USBHIST_LOG(usbdebug,FMT,A,B,C,D)
 #define	DPRINTFN(N,FMT,A,B,C,D)	USBHIST_LOGN(usbdebug,N,FMT,A,B,C,D)
@@ -161,8 +164,10 @@ usb_block_allocmem(bus_dma_tag_t tag, size_t size, size_t align,
 	if (!multiseg)
 		/* Caller wants one segment */
 		b->nsegs = 1;
+#ifndef SEL4
 	else
 		b->nsegs = howmany(size, PAGE_SIZE);
+#endif
 
 	b->segs = kmem_alloc(b->nsegs * sizeof(*b->segs), KM_SLEEP);
 	b->nsegs_alloc = b->nsegs;
@@ -204,7 +209,7 @@ usb_block_allocmem(bus_dma_tag_t tag, size_t size, size_t align,
  unmap:
 	bus_dmamem_unmap(tag, b->kaddr, b->size);
  free1:
-	bus_dmamem_free(tag, b->segs, b->nsegs);
+	bus_dmamem_free(tag, b->segs, b->nsegs); //!this needs adjusting
  free0:
 	kmem_free(b->segs, b->nsegs_alloc * sizeof(*b->segs));
 	kmem_free(b, sizeof(*b));

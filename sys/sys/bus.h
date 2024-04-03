@@ -29,8 +29,9 @@
 #ifndef _SYS_BUS_H_
 #define	_SYS_BUS_H_
 
-#include <sys/types.h>
+#include <dma.h>
 
+#define __HAVE_NEW_STYLE_BUS_H
 #ifdef __HAVE_NEW_STYLE_BUS_H
 
 #include <machine/bus_defs.h>
@@ -146,7 +147,7 @@ struct bus_dma_overrides {
 	    bus_size_t, bus_size_t, int, bus_dmamap_t *);
 	void (*ov_dmamap_destroy)(void *, bus_dma_tag_t, bus_dmamap_t);
 	int (*ov_dmamap_load)(void *, bus_dma_tag_t, bus_dmamap_t, void *,
-	    bus_size_t, struct proc *, int);
+	     bus_size_t, struct proc *, int);
 	int (*ov_dmamap_load_mbuf)(void *, bus_dma_tag_t, bus_dmamap_t,
 	    struct mbuf *, int);
 	int (*ov_dmamap_load_uio)(void *, bus_dma_tag_t, bus_dmamap_t,
@@ -163,7 +164,7 @@ struct bus_dma_overrides {
 	    size_t, void **, int);
 	void (*ov_dmamem_unmap)(void *, bus_dma_tag_t, void *, size_t);
 	paddr_t (*ov_dmamem_mmap)(void *, bus_dma_tag_t, bus_dma_segment_t *,
-	    int, off_t, int, int);
+	     int, off_t, int, int);
 	int (*ov_dmatag_subregion)(void *, bus_dma_tag_t, bus_addr_t,
 	    bus_addr_t, bus_dma_tag_t *, int);
 	void (*ov_dmatag_destroy)(void *, bus_dma_tag_t);
@@ -210,7 +211,9 @@ void	bus_space_trim(bus_space_tag_t, bus_space_reservation_t *, bus_size_t,
 	               bus_size_t);
 #endif
 
+#ifndef SEL4
 #include <sys/bus_proto.h>
+#endif
 
 #include <machine/bus_funcs.h>
 
@@ -252,5 +255,71 @@ typedef struct bus_dmamap {
  */
 #define	BUS_ADDR_HI32(a)	((uint32_t) __SHIFTOUT(a, __BITS(32,63)))
 #define	BUS_ADDR_LO32(a)	((uint32_t) __SHIFTOUT(a, __BITS(0,31)))
+
+#define __arch_read1(_ADDR)	({								\
+	void *_GET_ADDR;												\
+	if (sel4_io_map_is_paddr_mapped((void*)(_ADDR)))				\
+		_GET_ADDR = sel4_io_map_phys_to_virt((void*)(_ADDR));		\
+	else {															\
+        /* printf used to be log_io */   printf("Reading from unmapped address %p\n", (_ADDR));		\
+		_GET_ADDR = (void*)(_ADDR);									\
+	}																\
+	(*(volatile uint8_t *)(_GET_ADDR));						\
+})
+
+#define __arch_read2(_ADDR)	({								\
+	void *_GET_ADDR;												\
+	if (sel4_io_map_is_paddr_mapped((void*)(_ADDR)))				\
+		_GET_ADDR = sel4_io_map_phys_to_virt((void*)(_ADDR));		\
+	else {															\
+        /* printf used to be log_io */   printf("Reading from unmapped address %p\n", (_ADDR));		\
+		_GET_ADDR = (void*)(_ADDR);									\
+	}																\
+	(*(volatile uint16_t *)(_GET_ADDR));						\
+})
+
+#define __arch_read4(_ADDR)	({								\
+	void *_GET_ADDR;												\
+	if (sel4_io_map_is_paddr_mapped((void*)(_ADDR)))				\
+		_GET_ADDR = sel4_io_map_phys_to_virt((void*)(_ADDR));		\
+	else {															\
+        /* printf used to be log_io */   printf("Reading from unmapped address %p\n", (_ADDR));		\
+		_GET_ADDR = (void*)(_ADDR);									\
+	}																\
+	(*(volatile uint32_t *)(_GET_ADDR));						\
+})
+#define __arch_write1(_VALUE,_ADDR)	({								\
+	void *_GET_ADDR;												\
+	if (sel4_io_map_is_paddr_mapped((void*)(_ADDR)))				\
+		_GET_ADDR = sel4_io_map_phys_to_virt((void*)(_ADDR));		\
+	else {															\
+		/*printf used to be log_io */   printf("Writing from unmapped address %p\n", (_ADDR));		\
+		_GET_ADDR = (void*)(_ADDR);									\
+	}																\
+	(*(volatile uint8_t *)(_GET_ADDR) = (_VALUE));			\
+})
+#define __arch_write2(_VALUE,_ADDR)	({								\
+	void *_GET_ADDR;												\
+	if (sel4_io_map_is_paddr_mapped((void*)(_ADDR)))				\
+		_GET_ADDR = sel4_io_map_phys_to_virt((void*)(_ADDR));		\
+	else {															\
+		/*printf used to be log_io */   printf("Writing from unmapped address %p\n", (_ADDR));		\
+		_GET_ADDR = (void*)(_ADDR);									\
+	}																\
+	(*(volatile uint16_t *)(_GET_ADDR) = (_VALUE));			\
+})
+#define __arch_write4(_VALUE,_ADDR)	({								\
+	void *_GET_ADDR;												\
+	if (sel4_io_map_is_paddr_mapped((void*)(_ADDR)))				\
+		_GET_ADDR = sel4_io_map_phys_to_virt((void*)(_ADDR));		\
+	else {															\
+		/*printf used to be log_io */   printf("Writing from unmapped address %p\n", (_ADDR));		\
+		_GET_ADDR = (void*)(_ADDR);									\
+	}																\
+	(*(volatile uint32_t *)(_GET_ADDR) = (_VALUE));			\
+})
+
+#define __arch_set4(_ADDR,_MASK) 						(*(volatile uint32_t *)__arch_write4(__arch_read4(_ADDR) | _MASK, _ADDR))
+#define __arch_clr4(_ADDR,_MASK)						(*(volatile uint32_t *)__arch_write4(__arch_read4(_ADDR) & ~(_MASK), _ADDR));
 
 #endif	/* _SYS_BUS_H_ */

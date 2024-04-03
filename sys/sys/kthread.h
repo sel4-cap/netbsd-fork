@@ -33,6 +33,10 @@
 #ifndef _SYS_KTHREAD_H_
 #define	_SYS_KTHREAD_H_
 
+#ifdef SEL4
+#define kthread_create(...) 0
+#define	kthread_exit(int) 0
+#else
 #if !defined(_KERNEL)
 #error "not supposed to be exposed to userland"
 #endif
@@ -63,4 +67,5 @@ void	kthread_fpu_exit(int);
 void	kthread_fpu_enter_md(void);
 void	kthread_fpu_exit_md(void);
 
+#endif /* SEL4 */
 #endif /* _SYS_KTHREAD_H_ */

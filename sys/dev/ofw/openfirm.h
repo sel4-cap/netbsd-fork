@@ -104,7 +104,7 @@ int	openfirmware(void *);
 /*
  * Functions and variables provided by machine-independent code.
  */
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 struct device_compatible_entry;
 
 devhandle_t	devhandle_from_of(devhandle_t, int);

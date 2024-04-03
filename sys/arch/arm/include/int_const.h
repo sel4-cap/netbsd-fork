@@ -32,6 +32,7 @@
 #ifndef _ARM_INT_CONST_H_
 #define _ARM_INT_CONST_H_
 
+#ifndef SEL4
 #ifdef __INTMAX_C_SUFFIX__
 #include <sys/common_int_const.h>
 #else
@@ -72,3 +73,4 @@
 #endif /* !__INTMAX_C_SUFFIX__ */
 
 #endif /* !_ARM_INT_CONST_H_ */
+#endif /* !SEL4 */

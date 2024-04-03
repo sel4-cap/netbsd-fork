@@ -114,9 +114,11 @@
 struct device_lock {
 	int		dvl_nwait;
 	int		dvl_nlock;
+#ifndef SEL4
 	lwp_t		*dvl_holder;
 	kmutex_t	dvl_mtx;
 	kcondvar_t	dvl_cv;
+#endif
 };
 
 #define	DEVICE_SUSPENSORS_MAX	16
@@ -170,7 +172,7 @@ struct device {
 	void		(*dv_class_deregister)(device_t);
 
 	devgen_t		dv_add_gen,
-				dv_del_gen;
+					dv_del_gen;
 
 	struct device_lock	dv_lock;
 	const device_suspensor_t

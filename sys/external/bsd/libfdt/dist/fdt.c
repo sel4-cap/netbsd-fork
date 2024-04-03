@@ -35,7 +35,7 @@ int32_t fdt_ro_probe_(const void *fdt)
 		return -FDT_ERR_BADMAGIC;
 	}
 
-	if (totalsize < INT32_MAX)
+	if (totalsize < INT_MAX)
 		return totalsize;
 	else
 		return -FDT_ERR_TRUNCATED;

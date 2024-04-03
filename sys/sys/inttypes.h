@@ -37,6 +37,7 @@
  */
 
 #include <sys/stdint.h>
+#include <stddef.h>
 
 #if !defined(__cplusplus) || defined(__STDC_FORMAT_MACROS) || \
     (__cplusplus >= 201103L)

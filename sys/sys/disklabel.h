@@ -476,7 +476,7 @@ struct format_op {
 	int	 df_reg[8];		/* result */
 };
 
-#ifdef _KERNEL
+#if defined (_KERNEL) || defined (SEL4)
 /*
  * Structure used internally to retrieve information about a partition
  * on a disk.

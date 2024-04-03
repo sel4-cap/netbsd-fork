@@ -171,8 +171,17 @@ int	xhci_intr(void *);
 int	xhci_detach(struct xhci_softc *, int);
 int	xhci_activate(device_t, enum devact);
 void	xhci_childdet(device_t, device_t);
+#ifndef SEL4
 bool	xhci_suspend(device_t, const pmf_qual_t *);
 bool	xhci_resume(device_t, const pmf_qual_t *);
+#endif
+struct usbd_pipe_methods * 	get_root_intr_methods();
+struct usbd_pipe_methods * 	get_device_methods();
+struct usbd_pipe_methods * 	get_device_intr_methods();
+struct usbd_pipe_methods * get_device_bulk_methods();
+struct usbd_pipe_methods 	*get_up_methods(int);
+struct usbd_bus_methods 	*get_bus_methods();
+void xhci_softintr(void *);
 bool	xhci_shutdown(device_t, int);
 
 #define XHCI_TRANSFER_RING_TRBS 256

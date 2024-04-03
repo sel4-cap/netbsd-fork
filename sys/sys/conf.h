@@ -46,6 +46,9 @@
 #include <sys/queue.h>
 #include <sys/device_if.h>
 
+#include <sys/bus.h>
+#include <sys/systm.h>
+
 struct buf;
 struct knote;
 struct lwp;
@@ -219,6 +222,45 @@ extern	const char devioc[], devcls[];
 
 #endif /* _KERNEL */
 
+#ifdef SEL4 // taken out of _KERNEL block above
+
+devmajor_t bdevsw_lookup_major(const struct bdevsw *);
+devmajor_t cdevsw_lookup_major(const struct cdevsw *);
+
+int devenodev(dev_t, ...);
+
+typedef int dev_open_t(dev_t, int, int, struct lwp *);
+typedef int dev_close_t(dev_t, int, int, struct lwp *);
+typedef int dev_read_t(dev_t, struct uio *, int);
+typedef int dev_write_t(dev_t, struct uio *, int);
+typedef int dev_ioctl_t(dev_t, u_long, void *, int, struct lwp *);
+typedef void dev_strategy_t(struct buf *);
+typedef int dev_dump_t(dev_t, daddr_t, void *, size_t);
+typedef int dev_size_t(dev_t);
+
+typedef int dev_discard_t(dev_t, off_t, off_t);
+typedef void dev_stop_t(struct tty *, int);
+
+#define	dev_type_open(n)	dev_open_t n
+#define	dev_type_close(n)	dev_close_t n
+#define	dev_type_read(n)	dev_read_t n
+#define	dev_type_write(n)	dev_write_t n
+#define	dev_type_ioctl(n)	dev_ioctl_t n
+#define	dev_type_strategy(n)	dev_strategy_t n
+#define	dev_type_dump(n)	dev_dump_t n
+#define	dev_type_size(n)	dev_size_t n
+
+// #define	nodiscard	((dev_discard_t *)devenodev)
+// #define	nostop		((dev_stop_t *)ttyvenodev)
+#define	notty		NULL
+// #define	nopoll		seltrue
+paddr_t	nommap(dev_t, off_t, int);
+// #define	nokqfilter	seltrue_kqfilter
+
+// void ttyvenodev(struct tty *, ...);
+
+#endif
+
 /*
  * Line discipline switch table
  */
@@ -315,4 +357,4 @@ void	rootconf(void);
 void	swapconf(void);
 #endif /* _KERNEL */
 
-#endif /* !_SYS_CONF_H_ */
+#endif /* !_SYS_CONF_H_ */ 

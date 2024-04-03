@@ -1,4 +1,4 @@
-/*	$NetBSD: usbdi_util.c,v 1.88 2024/02/04 05:43:06 mrg Exp $	*/
+/*	$NetBSD: usbdi_util.c,v 1.87 2022/04/17 13:16:52 riastradh Exp $	*/
 
 /*
  * Copyright (c) 1998, 2012 The NetBSD Foundation, Inc.
@@ -6,7 +6,7 @@
  *
  * This code is derived from software contributed to The NetBSD Foundation
  * by Lennart Augustsson (lennart@augustsson.net) at
- * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna23.net).
+ * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna.com.au).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,7 +31,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: usbdi_util.c,v 1.88 2024/02/04 05:43:06 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: usbdi_util.c,v 1.87 2022/04/17 13:16:52 riastradh Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_usb.h"
@@ -52,6 +52,7 @@ __KERNEL_RCSID(0, "$NetBSD: usbdi_util.c,v 1.88 2024/02/04 05:43:06 mrg Exp $");
 #include <dev/usb/usbdi_util.h>
 #include <dev/usb/usb_quirks.h>
 #include <dev/usb/usbhist.h>
+#include <stdio.h>
 
 #define	DPRINTF(FMT,A,B,C,D)	USBHIST_LOGN(usbdebug,1,FMT,A,B,C,D)
 #define	DPRINTFN(N,FMT,A,B,C,D)	USBHIST_LOGN(usbdebug,N,FMT,A,B,C,D)
@@ -157,16 +158,16 @@ usbd_get_initial_ddesc(struct usbd_device *dev, usb_device_descriptor_t *desc)
 {
 	USBHIST_FUNC();
 	USBHIST_CALLARGS(usbdebug, "dev %#jx", (uintptr_t)dev, 0, 0, 0);
-	usb_device_request_t req;
-	char buf[64];
+	usb_device_request_t *req = kmem_alloc(sizeof(usb_device_request_t), 0);
+	char *buf = kmem_alloc(64 * sizeof(char), 0);
 	int res, actlen;
 
-	req.bmRequestType = UT_READ_DEVICE;
-	req.bRequest = UR_GET_DESCRIPTOR;
-	USETW2(req.wValue, UDESC_DEVICE, 0);
-	USETW(req.wIndex, 0);
-	USETW(req.wLength, 8);
-	res = usbd_do_request_flags(dev, &req, buf, USBD_SHORT_XFER_OK,
+	req->bmRequestType = UT_READ_DEVICE;
+	req->bRequest = UR_GET_DESCRIPTOR;
+	USETW2(req->wValue, UDESC_DEVICE, 0);
+	USETW(req->wIndex, 0);
+	USETW(req->wLength, 8);
+	res = usbd_do_request_flags(dev, req, buf, USBD_SHORT_XFER_OK,
 		&actlen, USBD_DEFAULT_TIMEOUT);
 	if (res)
 		return res;
@@ -689,6 +690,7 @@ usbd_intr_transfer(struct usbd_xfer *xfer, struct usbd_pipe *pipe,
 	return err;
 }
 
+#ifndef SEL4
 void
 usb_detach_waitold(device_t dv)
 {
@@ -709,6 +711,7 @@ usb_detach_wakeupold(device_t dv)
 
 	wakeup(dv); /* XXXSMP ok */
 }
+#endif
 
 /* -------------------------------------------------------------------------- */
 

@@ -209,4 +209,12 @@ kmutex_t *mutex_obj_tryalloc(kmutex_type_t, int);
 
 #endif /* _KERNEL */
 
+#define mutex_enter(d) 0
+#define mutex_init(d, f, i) 0
+#define mutex_owned(d) 0
+#define mutex_exit(d) 0
+#define mutex_destroy(d) 0
+#define mutex_spin_enter(d) 0
+#define mutex_spin_exit(d) 0
+
 #endif /* _SYS_MUTEX_H_ */

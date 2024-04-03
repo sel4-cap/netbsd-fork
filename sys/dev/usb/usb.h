@@ -1,4 +1,4 @@
-/*	$NetBSD: usb.h,v 1.124 2024/01/20 21:09:28 jmcneill Exp $	*/
+/*	$NetBSD: usb.h,v 1.123 2023/07/31 23:52:12 christos Exp $	*/
 
 /*
  * Copyright (c) 1998 The NetBSD Foundation, Inc.
@@ -39,7 +39,7 @@
 
 #include <sys/ioctl.h>
 
-#if defined(_KERNEL)
+#if defined(_KERNEL) || defined(SEL4)
 
 #include <sys/device.h>
 
@@ -778,7 +778,7 @@ typedef struct {
 /* Allow for marginal (i.e. non-conforming) devices. */
 #define USB_PORT_RESET_DELAY	50  /* ms */
 #define USB_PORT_ROOT_RESET_DELAY 250  /* ms */
-#define USB_PORT_RESET_RECOVERY	20  /* ms */
+#define USB_PORT_RESET_RECOVERY	10  /* ms */
 #define USB_PORT_POWERUP_DELAY	300 /* ms */
 #define USB_SET_ADDRESS_SETTLE	10  /* ms */
 #define USB_RESUME_DELAY	(50*5)  /* ms */
@@ -959,7 +959,9 @@ struct usb_event {
 #define USB_EVENT_DRIVER_DETACH 6
 #define USB_EVENT_IS_ATTACH(n) ((n) == USB_EVENT_CTRLR_ATTACH || (n) == USB_EVENT_DEVICE_ATTACH || (n) == USB_EVENT_DRIVER_ATTACH)
 #define USB_EVENT_IS_DETACH(n) ((n) == USB_EVENT_CTRLR_DETACH || (n) == USB_EVENT_DEVICE_DETACH || (n) == USB_EVENT_DRIVER_DETACH)
+	#ifndef SEL4
 	struct timespec		ue_time;
+	#endif
 	union {
 		struct {
 			int			ue_bus;
@@ -975,7 +977,9 @@ struct usb_event {
 /* old <=3.0 compat event */
 struct usb_event30 {
 	int                     ue_type;
+	#ifndef SEL4
 	struct timespec         ue_time;
+	#endif
 	union {
 		struct {
 			int                     ue_bus;
@@ -1035,5 +1039,22 @@ struct usb_event30 {
 /* Modem device */
 #define USB_GET_CM_OVER_DATA	_IOR ('U', 130, int)
 #define USB_SET_CM_OVER_DATA	_IOW ('U', 131, int)
+
+void	usb_event_thread(void *); //moved from usb.c
+
+//SEL4: structure to hold memory addresses for interrupts
+struct intr_ptrs_holder {
+	void *ums;
+	void *uts;
+	void *ukbd;
+	void *uhidev;
+	void *uhub;
+	void *uhid;
+	void *umass_wire_state;
+	void *umass_scsipi_cb;
+	void *umass_null_cb;
+};
+
+extern struct intr_ptrs_holder *intr_ptrs;
 
 #endif /* _USB_H_ */

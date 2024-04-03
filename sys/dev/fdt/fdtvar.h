@@ -31,12 +31,14 @@
 
 #include <sys/types.h>
 #include <sys/bus.h>
+#ifndef SEL4
 #include <sys/gpio.h>
 #include <sys/termios.h>
 
 #include <dev/i2c/i2cvar.h>
 #include <dev/pwm/pwmvar.h>
 #include <dev/clk/clk.h>
+#endif
 
 #ifdef _KERNEL_OPT
 #include "audio.h"
@@ -47,7 +49,9 @@
 typedef void *audio_dai_tag_t;
 #endif
 
+#ifndef SEL4
 #include <dev/clock_subr.h>
+#endif
 
 #include <dev/ofw/openfirm.h>
 
@@ -223,9 +227,18 @@ struct fdtbus_powerdomain_controller_func {
 
 
 struct fdtbus_pwm_controller_func {
+#ifndef SEL4
 	pwm_tag_t (*get_tag)(device_t, const void *, size_t);
+#endif
 };
 
+
+#ifdef SEL4 //SEL4: make attach and enable functions callable
+void exynos_usbdrdphy_attach(device_t, device_t, void *);
+int exynos_usbdrdphy_enable(device_t, void *, bool);
+void imx8mq_usbphy_attach(device_t, device_t, void *);
+int imx8mq_usbphy_enable(device_t, void *, bool);
+#endif
 
 struct fdtbus_regulator_controller;
 
@@ -352,6 +365,7 @@ struct fdt_dma_range {
 
 #define	FDT_BUS_SPACE_FLAG_NONPOSTED_MMIO	__BIT(0)
 
+#ifndef SEL4
 int		fdtbus_register_clock_controller(device_t, int,
 		    const struct fdtbus_clock_controller_func *);
 int		fdtbus_register_dai_controller(device_t, int,
@@ -386,6 +400,7 @@ int		fdtbus_register_reset_controller(device_t, int,
 int		fdtbus_register_spi_controller(device_t, int,
 		    const struct fdtbus_spi_controller_func *);
 int		fdtbus_register_syscon(device_t, int, struct syscon *);
+#endif
 
 void		fdtbus_set_decoderegprop(bool);
 
@@ -434,8 +449,10 @@ void		fdtbus_gpio_write(struct fdtbus_gpio_pin *, int);
 int		fdtbus_gpio_read_raw(struct fdtbus_gpio_pin *);
 void		fdtbus_gpio_write_raw(struct fdtbus_gpio_pin *, int);
 
+#ifndef SEL4
 i2c_tag_t	fdtbus_i2c_get_tag(int);
 i2c_tag_t	fdtbus_i2c_acquire(int, const char *);
+#endif
 
 void *		fdtbus_intr_establish(int, u_int, int, int,
 		    int (*func)(void *), void *arg);
@@ -491,8 +508,10 @@ int		fdtbus_pinctrl_parse_drive(int);
 int		fdtbus_pinctrl_parse_drive_strength(int);
 int		fdtbus_pinctrl_parse_input_output(int, int *);
 
+#ifndef SEL4
 pwm_tag_t	fdtbus_pwm_acquire(int, const char *);
 pwm_tag_t	fdtbus_pwm_acquire_index(int, const char *, int);
+#endif
 
 struct fdtbus_regulator *
 		fdtbus_regulator_acquire(int, const char *);
@@ -514,7 +533,9 @@ void		fdtbus_reset_put(struct fdtbus_reset *);
 int		fdtbus_reset_assert(struct fdtbus_reset *);
 int		fdtbus_reset_deassert(struct fdtbus_reset *);
 
+#ifndef SEL4
 int		fdtbus_todr_attach(device_t, int, todr_chip_handle_t);
+#endif
 
 void		fdtbus_power_reset(void);
 void		fdtbus_power_poweroff(void);
@@ -528,8 +549,10 @@ struct syscon *	fdtbus_syscon_acquire(int, const char *);
 struct syscon *	fdtbus_syscon_lookup(int);
 
 
+#ifndef SEL4
 device_t	fdtbus_attach_i2cbus(device_t, int, i2c_tag_t, cfprint_t);
 device_t	fdtbus_attach_spibus(device_t, int, cfprint_t);
+#endif
 
 bool		fdtbus_init(const void *);
 const void *	fdtbus_get_data(void);
@@ -543,7 +566,9 @@ const struct fdt_console *
 const char *	fdtbus_get_stdout_path(void);
 int		fdtbus_get_stdout_phandle(void);
 int		fdtbus_get_stdout_speed(void);
+#ifndef SEL4
 tcflag_t	fdtbus_get_stdout_flags(void);
+#endif
 
 bool		fdtbus_status_okay(int);
 

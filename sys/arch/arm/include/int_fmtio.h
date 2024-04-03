@@ -40,6 +40,7 @@
  */
 
 /* fprintf macros for signed integers */
+#ifndef SEL4
 #define	PRId8		"d"	/* int8_t		*/
 #define	PRId16		"d"	/* int16_t		*/
 #define	PRId32		"d"	/* int32_t		*/
@@ -357,3 +358,4 @@
 #endif /* !__INTPTR_FMTd__ */
 
 #endif /* !_ARM_INT_FMTIO_H_ */
+#endif

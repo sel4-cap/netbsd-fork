@@ -119,7 +119,9 @@ scsiprint(void *aux, const char *pnp)
 	return (UNCONF);
 }
 
+#ifndef SEL4
 MODULE(MODULE_CLASS_EXEC, scsi_subr, NULL);
+#endif
 
 static int scsi_subr_modcmd(modcmd_t cmd, void *opaque)
 {

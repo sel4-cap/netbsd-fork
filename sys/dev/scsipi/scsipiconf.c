@@ -61,6 +61,7 @@ __KERNEL_RCSID(0, "$NetBSD: scsipiconf.c,v 1.45 2019/03/28 10:44:29 kardel Exp $
 #include <dev/scsipi/scsipiconf.h>
 #include <dev/scsipi/scsipi_base.h>
 
+#include <sys/kmem.h>
 
 /* Function pointers and stub routines for scsiverbose module */
 int (*scsipi_print_sense)(struct scsipi_xfer *, int) = scsipi_print_sense_stub;
@@ -103,9 +104,13 @@ scsipi_command(struct scsipi_periph *periph, struct scsipi_generic *cmd,
 	if (!xs)
 		return (ENOMEM);
 
+#ifndef SEL4
 	mutex_enter(chan_mtx(periph->periph_channel));
+#endif
 	rc = scsipi_execute_xs(xs);
+#ifndef SEL4
 	mutex_exit(chan_mtx(periph->periph_channel));
+#endif
 
 	return rc;
 }
@@ -116,8 +121,10 @@ scsipi_command(struct scsipi_periph *periph, struct scsipi_generic *cmd,
 void
 scsipi_load_verbose(void)
 {
+#ifndef SEL4
 	if (scsi_verbose_loaded == 0)
 		module_autoload("scsiverbose", MODULE_CLASS_MISC);
+#endif
 }
 
 /*
@@ -129,7 +136,11 @@ scsipi_alloc_periph(int malloc_flag)
 	struct scsipi_periph *periph;
 	u_int i;
 
+#ifndef SEL4
 	periph = malloc(sizeof(*periph), M_DEVBUF, malloc_flag|M_ZERO);
+#else
+	periph = kmem_alloc(sizeof(*periph), 0);
+#endif
 	if (periph == NULL)
 		return NULL;
 
@@ -161,7 +172,11 @@ scsipi_free_periph(struct scsipi_periph *periph)
 {
 	scsipi_free_opcodeinfo(periph);
 	cv_destroy(&periph->periph_cv);
+#ifndef SEL4
 	free(periph, M_DEVBUF);
+#else
+	kmem_free(periph, 0);
+#endif
 }
 
 /*
@@ -189,16 +204,22 @@ scsipi_inqmatch(struct scsipi_inquiry_pattern *inqbuf, const void *base,
 			continue;
 		priority = 2;
 		len = strlen(match->vendor);
+#ifndef SEL4
 		if (memcmp(inqbuf->vendor, match->vendor, len))
 			continue;
+#endif
 		priority += len;
 		len = strlen(match->product);
+#ifndef SEL4
 		if (memcmp(inqbuf->product, match->product, len))
 			continue;
+#endif
 		priority += len;
 		len = strlen(match->revision);
+#ifndef SEL4
 		if (memcmp(inqbuf->revision, match->revision, len))
 			continue;
+#endif
 		priority += len;
 
 #ifdef SCSIPI_DEBUG

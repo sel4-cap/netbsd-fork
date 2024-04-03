@@ -81,6 +81,21 @@ extern int usbdebug;
 USBHIST_DECL(usbhist);
 
 #else
+#ifdef SEL4_USB_DEBUG
+
+#define USBHIST_DECL(NAME)
+#define USBHIST_DEFINE(NAME)
+#define USBHIST_INIT(NAME,N)
+#define USBHIST_LINK_STATIC(NAME)
+#define USBHIST_LOGN(N,NAME,FMT,A,B,C,D)		printf("%s#n@n: ", __func__); printf(FMT,A,B,C,D); printf("\n")
+#define USBHIST_LOGM(N,NAME,FMT,A,B,C,D)		printf("%s#n@n: ", __func__); printf(FMT,A,B,C,D); printf("\n")
+#define USBHIST_LOG(NAME,FMT,A,B,C,D)			printf("%s#n@n: ", __func__); printf(FMT,A,B,C,D); printf("\n")
+#define USBHIST_CALLARGS(NAME,FMT,A,B,C,D)		printf("%s#n@n: called: ", __func__); printf(FMT,A,B,C,D); printf("\n")
+#define USBHIST_CALLARGSN(NAME,N,FMT,A,B,C,D) 	printf("%s#n@n: called: ", __func__); printf(FMT,A,B,C,D); printf("\n")
+#define USBHIST_CALLED(NAME)					printf("%s#n@n: called!\n", __func__)
+#define USBHIST_FUNC()							do { } while(0)
+
+#else
 
 #define USBHIST_DECL(NAME)
 #define USBHIST_DEFINE(NAME)
@@ -94,6 +109,7 @@ USBHIST_DECL(usbhist);
 #define USBHIST_CALLED(NAME)
 #define USBHIST_FUNC()
 
+#endif
 #endif
 
 #endif /* _DEV_USBUSB_HIST_H_ */

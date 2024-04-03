@@ -62,9 +62,13 @@
  *	#endif
  */
 #define	_BSD_CLOCK_T_		unsigned int	/* clock() */
+#ifndef SEL4
 #define	_BSD_PTRDIFF_T_		__PTRDIFF_TYPE__ /* ptr1 - ptr2 */
+#endif
 #define	_BSD_SSIZE_T_		__PTRDIFF_TYPE__ /* byte count or error */
+#ifndef SEL4
 #define	_BSD_SIZE_T_		__SIZE_TYPE__	/* sizeof() */
+#endif
 #define	_BSD_TIME_T_		__int64_t	/* time() */
 #define	_BSD_CLOCKID_T_		int		/* clockid_t */
 #define	_BSD_TIMER_T_		int		/* timer_t */

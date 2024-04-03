@@ -70,6 +70,10 @@ int getticks(void);
 
 #define PROFSRC_CLOCK	0
 
+#elif defined SEL4
+#include "param.h"
+extern int hz;			/* system clock's frequency */
+extern int cold;		/* still working on startup */
 #endif
 
 #endif /* _SYS_KERNEL_H_ */

@@ -34,7 +34,7 @@
 #ifndef _SYS_MALLOC_H_
 #define	_SYS_MALLOC_H_
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined (SEL4)
 
 /*
  * flags to malloc

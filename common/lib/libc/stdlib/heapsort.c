@@ -50,7 +50,7 @@ __RCSID("$NetBSD: heapsort.c,v 1.3 2008/11/17 10:21:30 jnemeth Exp $");
 #endif
 #endif /* LIBC_SCCS and not lint */
 
-#if defined(_KERNEL) || defined(_STANDALONE)
+#if defined(_KERNEL) || defined(_STANDALONE) || defined (SEL4)
 #include <sys/types.h>
 
 #include <lib/libkern/libkern.h>
@@ -167,7 +167,7 @@ __weak_alias(heapsort,_heapsort)
  * a data set that will trigger the worst case is nonexistent.  Heapsort's
  * only advantage over quicksort is that it requires little additional memory.
  */
-#if defined(_KERNEL) || defined(_STANDALONE)
+#if defined(_KERNEL) || defined(_STANDALONE) || defined(SEL4)
 int
 kheapsort(void *vbase, size_t nmemb, size_t size,
     int (*compar)(const void *, const void *), void *k)
@@ -180,7 +180,7 @@ heapsort(void *vbase, size_t nmemb, size_t size,
 	size_t cnt, i, j, l;
 	char tmp, *tmp1, *tmp2;
 	char *base, *p, *t;
-#if !defined(_KERNEL) && !defined(_STANDALONE)
+#if !defined(_KERNEL) && !defined(_STANDALONE) && !defined(SEL4)
 	char *k;
 #endif
 
@@ -191,13 +191,13 @@ heapsort(void *vbase, size_t nmemb, size_t size,
 		return (0);
 
 	if (!size) {
-#if !defined(_KERNEL) && !defined(_STANDALONE)
+#if !defined(_KERNEL) && !defined(_STANDALONE) && !defined(SEL4)
 		errno = EINVAL;
 #endif
 		return (-1);
 	}
 
-#if !defined(_KERNEL) && !defined(_STANDALONE)
+#if !defined(_KERNEL) && !defined(_STANDALONE) && !defined(SEL4)
 	if ((k = malloc(size)) == NULL)
 		return (-1);
 #endif
@@ -222,7 +222,7 @@ heapsort(void *vbase, size_t nmemb, size_t size,
 		--nmemb;
 		SELECT(i, j, nmemb, t, p, size, k, cnt, tmp1, tmp2);
 	}
-#if !defined(_KERNEL) && !defined(_STANDALONE)
+#if !defined(_KERNEL) && !defined(_STANDALONE) && !defined(SEL4)
 	free(k);
 #endif
 	return (0);

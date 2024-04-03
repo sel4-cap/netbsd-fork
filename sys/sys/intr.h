@@ -97,6 +97,11 @@ extern u_int	softint_timing;
 
 #elif defined(_KMEMUSER)
 #define	SOFTINT_COUNT	0x0004
+#elif defined(SEL4)
+#define softint_schedule(x) 0
+#define softint_disestablish(x) 0
+#define	SOFTINT_SERIAL	0x0002
+#define	SOFTINT_MPSAFE	0x0100
 #endif	/* _KERNEL */
 
 #endif	/* _SYS_INTR_H_ */

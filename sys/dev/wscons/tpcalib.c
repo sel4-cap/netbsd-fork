@@ -88,6 +88,7 @@ tpcalib_trans(struct tpcalib_softc *sc, int rawx, int rawy, int *x, int *y)
 	}
 }
 
+#ifndef SEL4
 int
 tpcalib_ioctl(struct tpcalib_softc *sc, u_long cmd, void *data,
     int flag, struct lwp *l)
@@ -143,3 +144,4 @@ tpcalib_ioctl(struct tpcalib_softc *sc, u_long cmd, void *data,
 	}
 	return (0);
 }
+#endif

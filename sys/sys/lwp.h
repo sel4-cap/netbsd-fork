@@ -33,6 +33,12 @@
 #ifndef _SYS_LWP_H_
 #define _SYS_LWP_H_
 
+#include <machine/proc.h>		/* Machine-dependent proc substruct. */
+
+#ifdef SEL4
+struct lwp;
+#endif
+
 #if defined(_KERNEL) || defined(_KMEMUSER)
 
 #include <sys/param.h>
@@ -523,6 +529,9 @@ curlwp_bindx(int bound)
 	curlwp->l_pflag ^= bound ^ LP_BOUND;
 }
 
+#elif defined(SEL4)
+#define kpreempt_enable() 0
+#define kpreempt_disable() 0
 #endif /* _KERNEL */
 
 /* Flags for _lwp_create(), as per Solaris. */

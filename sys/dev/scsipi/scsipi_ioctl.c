@@ -59,14 +59,21 @@ __KERNEL_RCSID(0, "$NetBSD: scsipi_ioctl.c,v 1.73 2019/12/27 09:41:51 msaitoh Ex
 #include <dev/scsipi/scsiconf.h>
 #include <sys/scsiio.h>
 
+#ifndef SEL4
 #include "scsibus.h"
 #include "atapibus.h"
+#endif
+
+#include <sys/kmem.h>
+#include <stdio.h>
 
 struct scsi_ioctl {
 	LIST_ENTRY(scsi_ioctl) si_list;
 	struct buf si_bp;
+#ifndef SEL4
 	struct uio si_uio;
 	struct iovec si_iov;
+#endif
 	scsireq_t si_screq;
 	struct scsipi_periph *si_periph;
 };
@@ -86,8 +93,15 @@ si_get(void)
 {
 	struct scsi_ioctl *si;
 
+#ifndef SEL4
 	si = malloc(sizeof(struct scsi_ioctl), M_TEMP, M_WAITOK|M_ZERO);
+#else
+	si = kmem_alloc(sizeof(struct scsi_ioctl), 0);
+#endif
+
+#ifndef SEL4
 	buf_init(&si->si_bp);
+#endif
 	mutex_enter(&si_lock);
 	LIST_INSERT_HEAD(&si_head, si, si_list);
 	mutex_exit(&si_lock);
@@ -101,8 +115,12 @@ si_free(struct scsi_ioctl *si)
 	mutex_enter(&si_lock);
 	LIST_REMOVE(si, si_list);
 	mutex_exit(&si_lock);
+#ifndef SEL4
 	buf_destroy(&si->si_bp);
 	free(si, M_TEMP);
+#else
+	kmem_free(si, 0);
+#endif
 }
 
 static struct scsi_ioctl *
@@ -288,7 +306,9 @@ done:
 	if (error)
 		bp->b_resid = bp->b_bcount;
 	bp->b_error = error;
+#ifndef SEL4
 	biodone(bp);
+#endif
 	return;
 }
 
@@ -302,7 +322,7 @@ int
 scsipi_do_ioctl(struct scsipi_periph *periph, dev_t dev, u_long cmd,
     void *addr, int flag, struct lwp *l)
 {
-	int error;
+	int error = 0;
 
 	SC_DEBUG(periph, SCSIPI_DB2, ("scsipi_do_ioctl(0x%lx)\n", cmd));
 
@@ -342,6 +362,7 @@ scsipi_do_ioctl(struct scsipi_periph *periph, dev_t dev, u_long cmd,
 		si = si_get();
 		si->si_screq = *screq;
 		si->si_periph = periph;
+#ifndef SEL4
 		if (len) {
 			si->si_iov.iov_base = screq->databuf;
 			si->si_iov.iov_len = len;
@@ -370,6 +391,7 @@ scsipi_do_ioctl(struct scsipi_periph *periph, dev_t dev, u_long cmd,
 			scsistrategy(&si->si_bp);
 			error = si->si_bp.b_error;
 		}
+#endif
 		*screq = si->si_screq;
 		si_free(si);
 		return (error);

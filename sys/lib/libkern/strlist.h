@@ -35,6 +35,7 @@
 #include <sys/types.h>
 #if !defined(_KERNEL) && !defined(_STANDALONE)
 #include <stdbool.h>
+#include <stddef.h>
 #endif /* ! _KERNEL && !_STANDALONE */
 
 const char *	strlist_next(const char *, size_t, size_t *);

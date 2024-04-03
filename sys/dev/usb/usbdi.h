@@ -37,6 +37,7 @@
 #include <sys/types.h>
 
 #include <dev/usb/usb.h>
+#include <sys/mutex.h>
 
 struct usbd_bus;
 struct usbd_device;
@@ -188,7 +189,9 @@ const struct usbd_quirks *usbd_get_quirks(struct usbd_device *);
 
 usbd_status usbd_reload_device_desc(struct usbd_device *);
 
+#ifndef SEL4
 int usbd_ratecheck(struct timeval *);
+#endif
 
 usbd_status usbd_get_string(struct usbd_device *, int, char *);
 usbd_status usbd_get_string0(struct usbd_device *, int, char *, int);
@@ -301,7 +304,9 @@ struct usbif_attach_arg {
 #define UMATCH_GENERIC					 1
 /* No match */
 #define UMATCH_NONE					 0
+#define IPL_VM		5
 
+int usbd_get_sel4_id(struct usbd_device *);
 
 /*
  * IPL_USB is defined as IPL_VM for drivers that have not been made MP safe.
@@ -313,7 +318,16 @@ struct usbif_attach_arg {
 #define splhardusb splvm
 
 #define SOFTINT_USB SOFTINT_SERIAL
+#ifndef SEL4
 #define IPL_SOFTUSB IPL_SOFTSERIAL
+#endif
+#define IPL_SOFTUSB NULL
 #define splusb splsoftserial
 
+void uhub_intr(struct usbd_xfer *, void *, usbd_status);
+void uhidev_intr(struct usbd_xfer *, void *, usbd_status);
+void ukbd_intr(void *, void *, u_int);
+void ums_intr(void *, void *, u_int);
+void uts_intr(void *, void *, u_int);
+void uhid_intr(void *, void *, u_int);
 #endif /* _USBDI_H_ */

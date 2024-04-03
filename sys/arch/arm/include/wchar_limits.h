@@ -39,6 +39,7 @@
 /* limits of wchar_t */
 
 #ifdef __WCHAR_MIN__
+#undef WCHAR_MIN
 #define	WCHAR_MIN	__WCHAR_MIN__			/* wchar_t	  */
 #elif __WCHAR_UNSIGNED__
 #define	WCHAR_MIN	0U				/* wchar_t	  */
@@ -47,6 +48,7 @@
 #endif
 
 #ifdef __WCHAR_MAX__
+#undef WCHAR_MAX
 #define	WCHAR_MAX	__WCHAR_MAX__			/* wchar_t	  */
 #elif __WCHAR_UNSIGNED__
 #define	WCHAR_MAX	0xffffffffU			/* wchar_t	  */
@@ -57,6 +59,7 @@
 /* limits of wint_t */
 
 #ifdef __WINT_MIN__
+#undef WINT_MIN
 #define	WINT_MIN	__WINT_MIN__			/* wint_t	  */
 #elif __WINT_UNSIGNED__
 #define	WINT_MIN	0U				/* wint_t	  */
@@ -65,6 +68,7 @@
 #endif
 
 #ifdef __WINT_MAX__
+#undef WINT_MAX
 #define	WINT_MAX	__WINT_MAX__			/* wint_t	  */
 #elif __WINT_UNSIGNED__
 #define	WINT_MAX	0xffffffffU			/* wint_t	  */

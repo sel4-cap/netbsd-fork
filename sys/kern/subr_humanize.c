@@ -32,7 +32,10 @@
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: subr_humanize.c,v 1.2 2019/03/12 00:25:44 kre Exp $");
 
+#define wchar_t char
+#include <lib/libkern/libkern.h>
 #include <sys/types.h>
+#include <stdio.h>
 #include <sys/systm.h>
 
 /*
@@ -94,7 +97,7 @@ humanize_number(char *buf, size_t len, uint64_t bytes, const char *suffix,
 	for (i = 0; bytes >= umax && prefixes[i + 1]; i++)
 		bytes /= divisor;
  nodiv:
-	r = snprintf(buf, len, "%qu%s%c%s", (unsigned long long)bytes,
+	r = snprintf(buf, len, "%llu%s%c%s", (unsigned long long)bytes,
 	    i == 0 ? "" : " ", prefixes[i], suffix);
 
 	return (r);

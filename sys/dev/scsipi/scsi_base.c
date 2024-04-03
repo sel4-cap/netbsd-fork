@@ -47,6 +47,7 @@ __KERNEL_RCSID(0, "$NetBSD: scsi_base.c,v 1.93 2019/05/03 16:06:56 mlelstv Exp $
 #include <dev/scsipi/scsi_disk.h>
 #include <dev/scsipi/scsiconf.h>
 #include <dev/scsipi/scsipi_base.h>
+#include <stdio.h>
 
 static void scsi_print_xfer_mode(struct scsipi_periph *);
 /*

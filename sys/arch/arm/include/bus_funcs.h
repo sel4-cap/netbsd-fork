@@ -64,10 +64,16 @@
 #ifndef _ARM_BUS_FUNCS_H_
 #define _ARM_BUS_FUNCS_H_
 
+// seL4 includes
+#include <sel4_bus_funcs.h>
+#include <dma.h>
+#include <microkit.h>
+
 #ifdef _KERNEL_OPT
 #include "opt_cputypes.h"
 #endif
 
+#ifndef SEL4
 /*
  * Utility macros; INTERNAL USE ONLY.
  */
@@ -84,6 +90,7 @@
 	(*(t)->__bs_opname(type,sz))((t)->bs_cookie, h, o, v, c)
 #define	__bs_copy(sz, t, h1, o1, h2, o2, cnt)				\
 	(*(t)->__bs_opname(c,sz))((t)->bs_cookie, h1, o1, h2, o2, cnt)
+#endif
 
 #ifdef __BUS_SPACE_HAS_STREAM_METHODS
 #define	__bs_opname_s(op,size)	__bs_c(__bs_c(__bs_c(__bs_c(bs_,op),_),size),_s)
@@ -113,8 +120,13 @@
 	(*(t)->bs_map)((t)->bs_cookie, (a), (s), (c), (hp))
 #define	bus_space_unmap(t, h, s)					\
 	(*(t)->bs_unmap)((t)->bs_cookie, (h), (s))
+#ifndef SEL4
 #define	bus_space_subregion(t, h, o, s, hp)				\
 	(*(t)->bs_subregion)((t)->bs_cookie, (h), (o), (s), (hp))
+#else
+#define	bus_space_subregion(t, h, o, s, hp)				\
+	sel4_sub_region(h,o,hp)
+#endif
 
 
 /*
@@ -147,9 +159,27 @@
 /*
  * Bus read (single) operations.
  */
+#ifndef SEL4
 #define	bus_space_read_1(t, h, o)	__bs_rs(1,(t),(h),(o))
 #define	bus_space_read_2(t, h, o)	__bs_rs(2,(t),(h),(o))
 #define	bus_space_read_4(t, h, o)	__bs_rs(4,(t),(h),(o))
+#else
+#define	bus_space_read_1(t, h, o)	({\
+	void *_GET_ADDR;												\
+	_GET_ADDR = (uint32_t*)(h + o);									\
+	(*(volatile uint8_t *)(_GET_ADDR));								\
+})
+#define	bus_space_read_2(t, h, o)	({ \
+	void *_GET_ADDR;												\
+	_GET_ADDR = (uint32_t*)(h + o);									\
+	(*(volatile uint16_t *)(_GET_ADDR));							\
+})
+#define	bus_space_read_4(t, h, o)	({ 								\
+	void *_GET_ADDR;												\
+	_GET_ADDR = (uint32_t*)(h + o);									\
+	(*(volatile uint32_t *)(_GET_ADDR));							\
+})
+#endif
 #ifdef __HAVE_BUS_SPACE_8
 #define	bus_space_read_8(t, h, o)	__bs_rs(8,(t),(h),(o))
 #endif
@@ -220,9 +250,27 @@
 /*
  * Bus write (single) operations.
  */
+#ifndef SEL4
 #define	bus_space_write_1(t, h, o, v)	__bs_ws(1,(t),(h),(o),(v))
 #define	bus_space_write_2(t, h, o, v)	__bs_ws(2,(t),(h),(o),(v))
 #define	bus_space_write_4(t, h, o, v)	__bs_ws(4,(t),(h),(o),(v))
+#else
+#define	bus_space_write_1(t, h, o, v) ({\
+	uint32_t *_GET_ADDR;												\
+	_GET_ADDR = (uint32_t*)(h + o);										\
+	(*(volatile uint8_t *)(_GET_ADDR) = (v));							\
+})
+#define	bus_space_write_2(t, h, o, v)	({\
+	uint32_t *_GET_ADDR;												\
+	_GET_ADDR = (uint32_t*)(h + o);										\
+	(*(volatile uint16_t *)(_GET_ADDR) = (v));							\
+})
+#define	bus_space_write_4(t, h, o, v)	({\
+	uint32_t *_GET_ADDR;												\
+	_GET_ADDR = (uint32_t*)(h + o);										\
+	(*(volatile uint32_t *)(_GET_ADDR) = (v));							\
+})
+#endif
 #ifdef __HAVE_BUS_SPACE_8
 #define	bus_space_write_8(t, h, o, v)	__bs_ws(8,(t),(h),(o),(v))
 #endif
@@ -690,6 +738,7 @@ int bus_dmamap_load_raw(bus_dma_tag_t, bus_dmamap_t, bus_dma_segment_t *,
 void bus_dmamap_unload(bus_dma_tag_t, bus_dmamap_t);
 void bus_dmamap_sync(bus_dma_tag_t, bus_dmamap_t, bus_addr_t, bus_size_t, int);
 
+#ifndef SEL4
 #define	bus_dmamem_alloc(t, s, a, b, sg, n, r, f)		\
 	(*(t)->_dmamem_alloc)((t), (s), (a), (b), (sg), (n), (r), (f))
 #define	bus_dmamem_free(t, sg, n)				\
@@ -705,6 +754,37 @@ void bus_dmamap_sync(bus_dma_tag_t, bus_dmamap_t, bus_addr_t, bus_size_t, int);
 	(*(t)->_dmatag_subregion)((t), (mna), (mxa), (nt), (f))
 #define	bus_dmatag_destroy(t)					\
 	(*(t)->_dmatag_destroy)(t)
+#else
+#define	bus_dmamem_alloc(t, s, a, b, sg, n, r, f)		\
+	sel4_dma_alloc(s, sg); \
+	*r = 1;
+#define	bus_dmamem_free(t, sg, n)				\
+	printf("ERROR: free not implemented\n");
+#define	bus_dmamem_map(t, sg, n, s, k, f)			\
+	sel4_dma_map(k, sg);						
+#define	bus_dmamem_unmap(t, k, s)				\
+	0
+#define	bus_dmamap_destroy(t, k)				\
+	0
+#define	bus_dmamem_mmap(t, sg, n, o, p, f)			\
+	0
+#define bus_dmamap_create(t,s,n,mxs,b,f,dmap)		\
+	sel4_dma_map_create(dmap, s, mxs);
+#define bus_dmamap_load(t, dmam, buf, buflen, p, f) 		\
+	sel4_dma_map_load(dmam, buf, buflen);
+#define	bus_dmatag_subregion(t, mna, mxa, nt, f)		\
+	0
+#define	bus_dmatag_destroy(t)					\
+	0
+
+#define bus_dmamap_sync(t, dmam, o, len, f) \
+    void* h = ((void*) dmam->dm_segs->ds_addr);					\
+	if (f == BUS_DMASYNC_PREREAD || f == BUS_DMASYNC_PREWRITE) { \
+		seL4_ARM_VSpace_Invalidate_Data(3, (long)(h+o), (long)(h+o+len)); \
+	} else { \
+		seL4_ARM_VSpace_CleanInvalidate_Data(3, (long)(h+o), (long)(h+o+len)); \
+	}
+#endif
 
 #ifdef _ARM32_BUS_DMA_PRIVATE
 

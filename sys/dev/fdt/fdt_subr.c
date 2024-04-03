@@ -27,9 +27,12 @@
  */
 
 #include <sys/cdefs.h>
+#include <stdio.h>
 __KERNEL_RCSID(0, "$NetBSD: fdt_subr.c,v 1.39 2021/01/24 15:43:22 thorpej Exp $");
 
+#ifndef SEL4
 #include "opt_fdt.h"
+#endif
 
 #include <sys/param.h>
 #include <sys/bus.h>
@@ -201,7 +204,7 @@ fdtbus_get_cells(const uint8_t *buf, int cells)
 	case 0:		return 0;
 	case 1: 	return be32dec(buf);
 	case 2:		return ((uint64_t)be32dec(buf)<<32)|be32dec(buf+4);
-	default:	panic("fdtbus_get_cells: bad cells val %d\n", cells);
+	default:	printf("fdtbus_get_cells: bad cells val %d\n", cells);
 	}
 }
 
@@ -369,6 +372,7 @@ fdtbus_get_console(void)
 }
 #endif
 
+#ifndef SEL4
 const char *
 fdtbus_get_stdout_path(void)
 {
@@ -467,6 +471,7 @@ fdtbus_get_stdout_flags(void)
 
 	return flags;
 }
+#endif
 
 bool
 fdtbus_status_okay(int phandle)

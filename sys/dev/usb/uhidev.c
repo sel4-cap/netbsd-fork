@@ -1,4 +1,4 @@
-/*	$NetBSD: uhidev.c,v 1.95 2024/02/04 05:43:06 mrg Exp $	*/
+/*	$NetBSD: uhidev.c,v 1.94 2022/11/04 19:46:55 jmcneill Exp $	*/
 
 /*
  * Copyright (c) 2001, 2012 The NetBSD Foundation, Inc.
@@ -6,7 +6,7 @@
  *
  * This code is derived from software contributed to The NetBSD Foundation
  * by Lennart Augustsson (lennart@augustsson.net) at
- * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna23.net).
+ * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna.com.au).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uhidev.c,v 1.95 2024/02/04 05:43:06 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uhidev.c,v 1.94 2022/11/04 19:46:55 jmcneill Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_usb.h"
@@ -43,6 +43,7 @@ __KERNEL_RCSID(0, "$NetBSD: uhidev.c,v 1.95 2024/02/04 05:43:06 mrg Exp $");
 
 #include <sys/param.h>
 #include <sys/types.h>
+#include <sys/condvar.h>
 
 #include <sys/atomic.h>
 #include <sys/conf.h>
@@ -51,8 +52,10 @@ __KERNEL_RCSID(0, "$NetBSD: uhidev.c,v 1.95 2024/02/04 05:43:06 mrg Exp $");
 #include <sys/kernel.h>
 #include <sys/kmem.h>
 #include <sys/lwp.h>
+#ifndef SEL4
 #include <sys/rndsource.h>
 #include <sys/signalvar.h>
+#endif
 #include <sys/systm.h>
 #include <sys/xcall.h>
 
@@ -63,6 +66,7 @@ __KERNEL_RCSID(0, "$NetBSD: uhidev.c,v 1.95 2024/02/04 05:43:06 mrg Exp $");
 #include <dev/usb/usbdi.h>
 #include <dev/usb/usbdi_util.h>
 #include <dev/usb/usb_quirks.h>
+#include <stdio.h>
 
 #include <dev/usb/uhidev.h>
 #include <dev/hid/hid.h>
@@ -73,6 +77,8 @@ __KERNEL_RCSID(0, "$NetBSD: uhidev.c,v 1.95 2024/02/04 05:43:06 mrg Exp $");
 #include <dev/usb/xinput_rdesc.h>
 /* Report descriptor for Xbox One controllers */
 #include <dev/usb/x1input_rdesc.h>
+
+#include <stdlib.h>
 
 #include "locators.h"
 
@@ -93,7 +99,9 @@ struct uhidev_softc {
 		device_t	sc_dev;
 		void		(*sc_intr)(void *, void *, u_int);
 		void		*sc_cookie;
+#ifndef SEL4
 		krndsource_t	sc_rndsource;
+#endif
 		int		sc_in_rep_size;
 		uint8_t		sc_report_id;
 		uint8_t		sc_state;
@@ -136,7 +144,9 @@ int	uhidevdebug = 0;
 #define DPRINTFN(n,x)
 #endif
 
+#ifndef SEL4
 static void uhidev_intr(struct usbd_xfer *, void *, usbd_status);
+#endif
 
 static int uhidev_maxrepid(void *, int);
 static int uhidevprint(void *, const char *);
@@ -171,7 +181,7 @@ uhidev_match(device_t parent, cfdata_t match, void *aux)
 static void
 uhidev_attach(device_t parent, device_t self, void *aux)
 {
-	struct uhidev_softc *sc = device_private(self);
+	struct uhidev_softc *sc = kmem_alloc(sizeof(struct uhidev_softc), 0);
 	struct usbif_attach_arg *uiaa = aux;
 	struct usbd_interface *iface = uiaa->uiaa_iface;
 	usb_interface_descriptor_t *id;
@@ -218,7 +228,9 @@ uhidev_attach(device_t parent, device_t self, void *aux)
 		 * Wacom Intuos2 (XD-0912-U) requires longer idle time to
 		 * initialize the device with 0x0202.
 		 */
+#ifndef SEL4
 			DELAY(500000);
+#endif
 		}
 	}
 	(void)usbd_set_idle(iface, 0, 0);
@@ -428,8 +440,10 @@ uhidev_attach(device_t parent, device_t self, void *aux)
 			 * XXXSMP -- could be detached in the middle of
 			 * sleeping for allocation in rnd_attach_source
 			 */
+#ifndef SEL4
 			rnd_attach_source(&scd->sc_rndsource,
 			    device_xname(dev), RND_TYPE_TTY, RND_FLAG_DEFAULT);
+#endif
 		}
 	}
 	kmem_free(repsizes, nrepid * sizeof(*repsizes));
@@ -484,14 +498,16 @@ uhidev_childdet(device_t self, device_t child)
 	 * (Actually this can't happen right now because there's no
 	 * rescan method, but if there were, it could.)
 	 */
+#ifndef SEL4
 	rnd_detach_source(&sc->sc_subdevs[i].sc_rndsource);
+#endif
 }
 
 static int
 uhidev_detach(device_t self, int flags)
 {
 	struct uhidev_softc *sc = device_private(self);
-	int rv;
+	int rv = 9;
 
 	DPRINTF(("uhidev_detach: sc=%p flags=%d\n", sc, flags));
 
@@ -503,9 +519,11 @@ uhidev_detach(device_t self, int flags)
 	 * refusing detachment.  If they do detach, the pipes can no
 	 * longer be in use.
 	 */
+#ifndef SEL4
 	rv = config_detach_children(self, flags);
 	if (rv)
 		return rv;
+#endif
 
 	KASSERTMSG(sc->sc_refcnt == 0,
 	    "%s: %d refs remain", device_xname(sc->sc_dev), sc->sc_refcnt);
@@ -534,7 +552,7 @@ uhidev_detach(device_t self, int flags)
 	return rv;
 }
 
-static void
+void
 uhidev_intr(struct usbd_xfer *xfer, void *addr, usbd_status status)
 {
 	struct uhidev_softc *sc = addr;
@@ -568,10 +586,16 @@ uhidev_intr(struct usbd_xfer *xfer, void *addr, usbd_status status)
 	}
 
 	p = sc->sc_ibuf;
-	if (sc->sc_nrepid != 1)
+	if (sc->sc_nrepid != 1) {
 		rep = *p++, cc--;
-	else
+		if (rep == 0) {
+			aprint_debug("WARNING: rep manually set to 1 (touch screen?)");
+			rep = 1; //seL4 added nested if statement to make touchscreen avoid repid 0 and default to 1
+		}
+	}
+	else {
 		rep = 0;
+	}
 	if (rep >= sc->sc_nrepid) {
 		printf("uhidev_intr: bad repid %d\n", rep);
 		return;
@@ -579,8 +603,10 @@ uhidev_intr(struct usbd_xfer *xfer, void *addr, usbd_status status)
 	scd = &sc->sc_subdevs[rep];
 	DPRINTFN(5,("uhidev_intr: rep=%d, scd=%p state=%#x\n",
 		    rep, scd, scd->sc_state));
+#ifndef SEL4
 	if (!(atomic_load_acquire(&scd->sc_state) & UHIDEV_OPEN))
 		return;
+#endif
 #ifdef UHIDEV_DEBUG
 	if (scd->sc_in_rep_size != cc) {
 		DPRINTF(("%s: expected %d bytes, got %d\n",
@@ -592,7 +618,9 @@ uhidev_intr(struct usbd_xfer *xfer, void *addr, usbd_status status)
 			device_xname(sc->sc_dev)));
 		return;
 	}
+#ifndef SEL4
 	rnd_add_uint32(&scd->sc_rndsource, (uintptr_t)(sc->sc_ibuf));
+#endif
 	scd->sc_intr(scd->sc_cookie, p, cc);
 }
 
@@ -620,7 +648,9 @@ uhidev_config_enter(struct uhidev_softc *sc)
 			return error;
 	}
 
+#ifndef SEL4 //XXX curlwp not needed
 	sc->sc_configlock = curlwp;
+#endif
 	return 0;
 }
 
@@ -630,9 +660,11 @@ uhidev_config_enter_nointr(struct uhidev_softc *sc)
 
 	KASSERT(mutex_owned(&sc->sc_lock));
 
+#ifndef SEL4 //XXX curlwp not needed
 	while (sc->sc_configlock)
 		cv_wait(&sc->sc_cv, &sc->sc_lock);
 	sc->sc_configlock = curlwp;
+#endif
 }
 
 static void
@@ -640,8 +672,10 @@ uhidev_config_exit(struct uhidev_softc *sc)
 {
 
 	KASSERT(mutex_owned(&sc->sc_lock));
+#ifndef SEL4 //curlwp not needed
 	KASSERTMSG(sc->sc_configlock == curlwp, "%s: migrated from %p to %p",
 	    device_xname(sc->sc_dev), curlwp, sc->sc_configlock);
+#endif
 
 	sc->sc_configlock = NULL;
 	cv_broadcast(&sc->sc_cv);
@@ -699,8 +733,8 @@ uhidev_open_pipes(struct uhidev_softc *sc)
 	}
 	mutex_exit(&sc->sc_lock);
 
-	/* Allocate an input buffer.  */
-	sc->sc_ibuf = kmem_alloc(sc->sc_isize, KM_SLEEP);
+	/* Allocate an input buffer. This is allocated in memory shared with client */
+	sc->sc_ibuf = malloc(sc->sc_isize);
 
 	/* Set up input interrupt pipe. */
 	DPRINTF(("%s: isize=%d, ep=0x%02x\n", __func__, sc->sc_isize,
@@ -708,7 +742,7 @@ uhidev_open_pipes(struct uhidev_softc *sc)
 
 	err = usbd_open_pipe_intr(sc->sc_iface, sc->sc_iep_addr,
 		  USBD_SHORT_XFER_OK, &sc->sc_ipipe, sc, sc->sc_ibuf,
-		  sc->sc_isize, uhidev_intr, USBD_DEFAULT_INTERVAL);
+		  sc->sc_isize, intr_ptrs->uhidev, USBD_DEFAULT_INTERVAL);
 	if (err != USBD_NORMAL_COMPLETION) {
 		DPRINTF(("uhidopen: usbd_open_pipe_intr failed, "
 		    "error=%d\n", err));
@@ -1024,7 +1058,9 @@ uhidev_close(struct uhidev *scd)
 	 * until after uhidev_close returns.
 	 */
 	mutex_exit(&sc->sc_lock);
+#ifndef SEL4
 	xc_barrier(XC_HIGHPRI);
+#endif
 	mutex_enter(&sc->sc_lock);
 	KASSERT((scd->sc_state & UHIDEV_OPEN) == 0);
 	scd->sc_intr = NULL;
@@ -1088,7 +1124,9 @@ uhidev_write(struct uhidev *scd, void *data, int len)
 			goto out;
 		}
 	}
+#ifndef SEL4 //curlwp not needed
 	sc->sc_writelock = curlwp;
+#endif
 	sc->sc_writereportid = scd->sc_report_id;
 	mutex_exit(&sc->sc_lock);
 
@@ -1110,8 +1148,10 @@ uhidev_write(struct uhidev *scd, void *data, int len)
 	mutex_enter(&sc->sc_lock);
 	KASSERT(sc->sc_refcnt);
 	KASSERT(scd->sc_state & UHIDEV_OPEN);
+#ifndef SEL4 //curlwp not needed
 	KASSERTMSG(sc->sc_writelock == curlwp, "%s: migrated from %p to %p",
 	    device_xname(sc->sc_dev), curlwp, sc->sc_writelock);
+#endif
 	KASSERTMSG(sc->sc_writereportid == scd->sc_report_id,
 	    "%s: changed write report ids from %d to %d",
 	    device_xname(sc->sc_dev), scd->sc_report_id, sc->sc_writereportid);

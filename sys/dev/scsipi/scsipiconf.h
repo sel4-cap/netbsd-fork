@@ -144,7 +144,7 @@ typedef enum {
 	ADAPTER_REQ_SET_XFER_MODE	/* set xfer mode */
 } scsipi_adapter_req_t;
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 /*
  * scsipi_periphsw:
  *
@@ -205,7 +205,9 @@ struct scsipi_adapter {
 	int	(*adapt_accesschk)(struct scsipi_periph *,
 			struct scsipi_inquiry_pattern *);
 
+#ifndef SEL4
 	kmutex_t adapt_mtx;
+#endif
 	volatile int	adapt_running;	/* how many users of mutex */
 };
 
@@ -268,7 +270,7 @@ struct scsipi_bustype {
 #define	SCSIPI_CHAN_PERIPH_BUCKETS	16
 #define	SCSIPI_CHAN_PERIPH_HASHMASK	(SCSIPI_CHAN_PERIPH_BUCKETS - 1)
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 struct scsipi_channel {
 	const struct scsipi_bustype *chan_bustype; /* channel's bus type */
 	const char *chan_name;	/* this channel's name */
@@ -318,7 +320,11 @@ struct scsipi_channel {
 };
 
 #define chan_running(ch) ((ch)->chan_adapter->adapt_running)
+#ifndef SEL4
 #define chan_mtx(ch) (&(ch)->chan_adapter->adapt_mtx)
+#else
+#define chan_mtx(ch) 0
+#endif
 #endif
 
 /* chan_flags */
@@ -352,7 +358,7 @@ struct scsipi_channel {
  */
 #define	PERIPH_NTAGWORDS	((256 / 8) / sizeof(u_int32_t))
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 /*
  * scsipi_opcodes:
  *      This optionally allocated structure documents
@@ -520,7 +526,7 @@ typedef enum {
 	XS_REQUEUE		/* requeue this command */
 } scsipi_xfer_result_t;
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 /*
  * Each scsipi transaction is fully described by one of these structures
  * It includes information about the source of the command and also the
@@ -675,7 +681,7 @@ struct scsi_quirk_inquiry_pattern {
 #define SCSIPIRETRIES 4
 
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 void	scsipi_init(void);
 void	scsipi_ioctl_init(void);
 void	scsipi_load_verbose(void);

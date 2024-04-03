@@ -34,7 +34,7 @@
 #ifndef _HIDHID_H_
 #define _HIDHID_H_
 
-#if defined(_KERNEL) || defined(_RUMPKERNEL)
+#if defined(_KERNEL) || defined(_RUMPKERNEL) || defined(SEL4)
 
 enum hid_kind {
 	hid_input,

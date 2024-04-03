@@ -130,8 +130,8 @@ __KERNEL_RCSID(0, "$NetBSD: umass.c,v 1.189 2022/09/22 14:27:52 riastradh Exp $"
 #include "opt_usb.h"
 #endif
 
-#include "atapibus.h"
-#include "scsibus.h"
+//#include "atapibus.h"
+//#include "scsibus.h"
 
 #include <sys/param.h>
 #include <sys/buf.h>
@@ -153,8 +153,14 @@ __KERNEL_RCSID(0, "$NetBSD: umass.c,v 1.189 2022/09/22 14:27:52 riastradh Exp $"
 #include <dev/usb/umass_quirks.h>
 #include <dev/usb/umass_scsipi.h>
 
+#include <dev/usb/scsibus.h>
+
 #include <dev/scsipi/scsipi_all.h>
 #include <dev/scsipi/scsipiconf.h>
+#include <stdio.h>
+
+extern struct umass_wire_methods *umass_bbb_methods_pointer;
+extern struct umass_wire_methods *umass_bbb_methods_pointer_other;
 
 SDT_PROBE_DEFINE1(usb, umass, device, attach__start,
     "struct umass_softc *"/*sc*/);
@@ -308,7 +314,7 @@ Static void umass_cbi_state(struct usbd_xfer *, void *, usbd_status);
 Static int umass_cbi_adsc(struct umass_softc *, char *, int, int,
     struct usbd_xfer *);
 
-const struct umass_wire_methods umass_bbb_methods = {
+struct umass_wire_methods umass_bbb_methods = {
 	.wire_xfer = umass_bbb_transfer,
 	.wire_reset = umass_bbb_reset,
 	.wire_state = umass_bbb_state
@@ -319,6 +325,14 @@ const struct umass_wire_methods umass_cbi_methods = {
 	.wire_reset = umass_cbi_reset,
 	.wire_state = umass_cbi_state
 };
+
+uintptr_t *get_umass_wire_state() {
+	return (uintptr_t*) &umass_bbb_state;
+}
+
+struct umass_wire_methods *get_umass_bbb_methods() {
+	return &umass_bbb_methods;
+}
 
 #ifdef UMASS_DEBUG
 /* General debugging functions */
@@ -391,7 +405,9 @@ umass_attach(device_t parent, device_t self, void *aux)
 	aprint_naive("\n");
 	aprint_normal("\n");
 
+#ifndef SEL4
 	mutex_init(&sc->sc_lock, MUTEX_DEFAULT, IPL_SOFTUSB);
+#endif
 
 	devinfop = usbd_devinfo_alloc(uiaa->uiaa_device, 0);
 	aprint_normal_dev(self, "%s\n", devinfop);
@@ -575,8 +591,10 @@ umass_attach(device_t parent, device_t self, void *aux)
 			SDT_PROBE2(usb, umass, device, attach__done,  sc, err);
 			return;
 		}
+#ifndef SEL4
 		if (sc->maxlun > 0)
 			sc->sc_busquirks |= PQUIRK_FORCELUNS;
+#endif
 	} else {
 		sc->maxlun = 0;
 	}
@@ -858,9 +876,13 @@ umass_detach(device_t self, int flags)
 	DPRINTFM(UDMASS_USB, "sc %#jx detached", (uintptr_t)sc, 0, 0, 0);
 	SDT_PROBE1(usb, umass, device, detach__start,  sc);
 
+#ifndef SEL4
 	mutex_enter(&sc->sc_lock);
+#endif
 	sc->sc_dying = true;
+#ifndef SEL4
 	mutex_exit(&sc->sc_lock);
+#endif
 
 	pmf_device_deregister(self);
 
@@ -873,8 +895,10 @@ umass_detach(device_t self, int flags)
 
 	scbus = sc->bus;
 	if (scbus != NULL) {
+#ifndef SEL4
 		if (scbus->sc_child != NULL)
 			rv = config_detach(scbus->sc_child, flags);
+#endif
 
 		switch (sc->sc_cmd) {
 		case UMASS_CPROTO_RBC:
@@ -911,7 +935,9 @@ umass_detach(device_t self, int flags)
 
 	usbd_add_drv_event(USB_EVENT_DRIVER_DETACH, sc->sc_udev, sc->sc_dev);
 
+#ifndef SEL4
 	mutex_destroy(&sc->sc_lock);
+#endif
 
 out:	SDT_PROBE2(usb, umass, device, detach__done,  sc, rv);
 	return rv;
@@ -984,8 +1010,12 @@ umass_setup_transfer(struct umass_softc *sc, struct usbd_pipe *pipe,
 
 	/* Initialise a USB transfer and then schedule it */
 
-	usbd_setup_xfer(xfer, sc, buffer, buflen, flags, sc->timeout,
-	    sc->sc_methods->wire_state);
+	if(sc->sc_methods == umass_bbb_methods_pointer_other || sc->sc_methods == umass_bbb_methods_pointer ) {
+		usbd_setup_xfer(xfer, sc, buffer, buflen, flags, sc->timeout,
+	   		intr_ptrs->umass_wire_state);
+	} else {
+		printf("umass.c: ERROR: wire_xfer not implemented!\n");
+	}
 
 	err = usbd_transfer(xfer);
 	DPRINTFM(UDMASS_XFER, "start xfer buffer=%#jx buflen=%jd flags=%#jx "
@@ -1013,7 +1043,7 @@ umass_setup_ctrl_transfer(struct umass_softc *sc, usb_device_request_t *req,
 	/* Initialise a USB control transfer and then schedule it */
 
 	usbd_setup_default_xfer(xfer, sc->sc_udev, sc, USBD_DEFAULT_TIMEOUT,
-	    req, buffer, buflen, flags, sc->sc_methods->wire_state);
+		req, buffer, buflen, flags, intr_ptrs->umass_wire_state);
 
 	err = usbd_transfer(xfer);
 	if (err && err != USBD_IN_PROGRESS) {
@@ -1531,7 +1561,7 @@ umass_bbb_state(struct usbd_xfer *xfer, void *priv,
 
 		} else if (sc->transfer_actlen > sc->transfer_datalen) {
 			/* Buffer overrun! Don't let this go by unnoticed */
-			panic("%s: transferred %s %d bytes instead of %d bytes",
+			printf("%s: transferred %s %d bytes instead of %d bytes",
 			    device_xname(sc->sc_dev),
 			    sc->transfer_dir == DIR_IN ? "IN" : "OUT",
 			    sc->transfer_actlen, sc->transfer_datalen);
@@ -1593,7 +1623,7 @@ umass_bbb_state(struct usbd_xfer *xfer, void *priv,
 
 	/***** Default *****/
 	default:
-		panic("%s: Unknown state %d",
+		printf("%s: Unknown state %d",
 		      device_xname(sc->sc_dev), sc->transfer_state);
 	}
 }
@@ -2040,7 +2070,7 @@ umass_cbi_state(struct usbd_xfer *xfer, void *priv,
 
 	/***** Default *****/
 	default:
-		panic("%s: Unknown state %d",
+		printf("%s: Unknown state %d",
 		      device_xname(sc->sc_dev), sc->transfer_state);
 	}
 }

@@ -70,6 +70,11 @@
 
 #include <sys/lwp.h>
 
+// SEL4: processes not handled but us: we are not an OS
+struct proc {
+	int empty;
+};
+
 #if defined(_KMEMUSER) || defined(_KERNEL)
 
 #if defined(_KERNEL_OPT)

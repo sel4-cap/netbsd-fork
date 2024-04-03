@@ -31,7 +31,7 @@
 
 #ifndef	_SYS_RNDSOURCE_H
 #define	_SYS_RNDSOURCE_H
-
+#ifndef SEL4 //SEL4: not relevant
 #ifndef _KERNEL			/* XXX */
 #error <sys/rndsource.h> is meant for kernel consumers only.
 #endif
@@ -100,3 +100,4 @@ void	rnd_add_data_sync(struct krndsource *, const void *, uint32_t,
 	    uint32_t);
 
 #endif	/* _SYS_RNDSOURCE_H */
+#endif

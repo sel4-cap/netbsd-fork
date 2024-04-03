@@ -387,7 +387,11 @@ __END_DECLS
 #define atomic_inc_ulong_nv	kmsan_atomic_inc_ulong_nv
 #define atomic_inc_ptr_nv	kmsan_atomic_inc_ptr_nv
 #define atomic_inc_64_nv	kmsan_atomic_inc_64_nv
+#elif defined SEL4
+#define atomic_cas_uint(...) 0
 #endif
+
+
 
 #ifdef _KERNEL
 
@@ -558,6 +562,11 @@ __do_atomic_store(volatile void *p, const void *q, size_t size)
 
 #endif	/* __STDC_VERSION__ */
 
+#elif defined SEL4 //SEL4: stubbed out atomic funcs
+#define atomic_cas_uint(...) 0
+#define	atomic_store_release(p,v) 0
+#define	atomic_load_acquire(p) 0
+#define	atomic_store_relaxed(p,v) 0
 #endif	/* _KERNEL */
 
 #endif /* ! _SYS_ATOMIC_H_ */

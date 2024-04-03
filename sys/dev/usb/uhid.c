@@ -1,4 +1,4 @@
-/*	$NetBSD: uhid.c,v 1.129 2024/02/04 05:43:06 mrg Exp $	*/
+/*	$NetBSD: uhid.c,v 1.128 2023/07/31 17:41:18 christos Exp $	*/
 
 /*
  * Copyright (c) 1998, 2004, 2008, 2012 The NetBSD Foundation, Inc.
@@ -6,7 +6,7 @@
  *
  * This code is derived from software contributed to The NetBSD Foundation
  * by Lennart Augustsson (lennart@augustsson.net) at
- * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna23.net).
+ * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna.com.au).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: uhid.c,v 1.129 2024/02/04 05:43:06 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: uhid.c,v 1.128 2023/07/31 17:41:18 christos Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_compat_netbsd.h"
@@ -46,7 +46,9 @@ __KERNEL_RCSID(0, "$NetBSD: uhid.c,v 1.129 2024/02/04 05:43:06 mrg Exp $");
 #include <sys/types.h>
 
 #include <sys/atomic.h>
+#ifndef SEL4
 #include <sys/compat_stub.h>
+#endif
 #include <sys/conf.h>
 #include <sys/device.h>
 #include <sys/file.h>
@@ -57,10 +59,14 @@ __KERNEL_RCSID(0, "$NetBSD: uhid.c,v 1.129 2024/02/04 05:43:06 mrg Exp $");
 #include <sys/poll.h>
 #include <sys/proc.h>
 #include <sys/select.h>
+#ifndef SEL4
 #include <sys/signalvar.h>
+#endif
 #include <sys/systm.h>
+#ifndef SEL4
 #include <sys/tty.h>
 #include <sys/vnode.h>
+#endif
 
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
@@ -91,7 +97,9 @@ struct uhid_softc {
 	uint8_t sc_report_id;
 
 	kmutex_t sc_lock;
+#ifndef SEL4
 	kcondvar_t sc_cv;
+#endif
 
 	int sc_isize;
 	int sc_osize;
@@ -99,9 +107,11 @@ struct uhid_softc {
 
 	u_char *sc_obuf;
 
+#ifndef SEL4
 	struct clist sc_q;	/* protected by sc_lock */
 	struct selinfo sc_rsel;
 	proc_t *sc_async;	/* process that wants SIGIO */
+#endif
 	void *sc_sih;
 	volatile uint32_t sc_state;	/* driver state */
 #define UHID_IMMED	0x02	/* return read data immediately */
@@ -119,6 +129,7 @@ struct uhid_softc {
 #define	UHID_CHUNK	128	/* chunk size for read */
 #define	UHID_BSIZE	1020	/* buffer size */
 
+#ifndef SEL4
 static dev_type_open(uhidopen);
 static dev_type_cancel(uhidcancel);
 static dev_type_close(uhidclose);
@@ -147,6 +158,7 @@ const struct cdevsw uhid_cdevsw = {
 };
 
 static void uhid_intr(void *, void *, u_int);
+#endif
 
 static int	uhid_match(device_t, cfdata_t, void *);
 static void	uhid_attach(device_t, device_t, void *);
@@ -173,11 +185,12 @@ uhid_match(device_t parent, cfdata_t match, void *aux)
 static void
 uhid_attach(device_t parent, device_t self, void *aux)
 {
-	struct uhid_softc *sc = device_private(self);
+	struct uhid_softc *sc = kmem_zalloc(sizeof(struct uhid_softc), 0);
 	struct uhidev_attach_arg *uha = aux;
 	int size, repid;
 	void *desc;
 
+#ifndef SEL4
 	sc->sc_dev = self;
 	sc->sc_hdev = uha->parent;
 	sc->sc_udev = uha->uiaa->uiaa_device;
@@ -202,6 +215,7 @@ uhid_attach(device_t parent, device_t self, void *aux)
 
 	if (!pmf_device_register(self, NULL, NULL))
 		aprint_error_dev(self, "couldn't establish power handler\n");
+#endif
 
 	return;
 }
@@ -209,6 +223,7 @@ uhid_attach(device_t parent, device_t self, void *aux)
 static int
 uhid_detach(device_t self, int flags)
 {
+#ifndef SEL4
 	struct uhid_softc *sc = device_private(self);
 	int maj, mn;
 
@@ -228,11 +243,12 @@ uhid_detach(device_t self, int flags)
 	cv_destroy(&sc->sc_cv);
 	mutex_destroy(&sc->sc_lock);
 	seldestroy(&sc->sc_rsel);
+#endif
 
 	return 0;
 }
 
-static void
+void
 uhid_intr(void *cookie, void *data, u_int len)
 {
 	struct uhid_softc *sc = cookie;
@@ -249,6 +265,7 @@ uhid_intr(void *cookie, void *data, u_int len)
 #endif
 
 	mutex_enter(&sc->sc_lock);
+#ifndef SEL4
 	(void)b_to_q(data, len, &sc->sc_q);
 
 	DPRINTFN(5, ("uhid_intr: waking %p\n", &sc->sc_q));
@@ -264,8 +281,10 @@ uhid_intr(void *cookie, void *data, u_int len)
 		mutex_exit(&proc_lock);
 	}
 	mutex_exit(&sc->sc_lock);
+#endif
 }
 
+#ifndef SEL4
 static int
 uhidopen(dev_t dev, int flag, int mode, struct lwp *l)
 {
@@ -768,3 +787,4 @@ uhidkqfilter(dev_t dev, struct knote *kn)
 		return EINVAL;
 	}
 }
+#endif

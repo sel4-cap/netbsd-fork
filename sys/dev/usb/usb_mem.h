@@ -67,8 +67,8 @@ void		usb_syncmem(usb_dma_t *, bus_addr_t, bus_size_t, int);
 
 bus_addr_t	usb_dmaaddr(usb_dma_t *, unsigned int);
 
-#define DMAADDR(dma, o)	usb_dmaaddr((dma), (o))
+#define DMAADDR(dma, o)	((bus_addr_t) getPhys((void*) usb_dmaaddr((dma), (o))))
 #define KERNADDR(dma, o) \
-	((void *)((char *)(dma)->udma_block->kaddr + (dma)->udma_offs + (o)))
+	((void *)(usb_dmaaddr((dma),(o))))
 
 #endif	/* _DEV_USB_USB_MEM_H_ */

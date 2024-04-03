@@ -1,4 +1,4 @@
-/*	$NetBSD: condvar.h,v 1.19 2023/11/02 10:31:55 martin Exp $	*/
+/*	$NetBSD: condvar.h,v 1.17 2020/05/11 03:59:33 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2006, 2007, 2008, 2020 The NetBSD Foundation, Inc.
@@ -63,6 +63,14 @@ bool	cv_is_valid(kcondvar_t *);
 /* The "lightning bolt", awoken once per second by the clock interrupt. */
 extern kcondvar_t lbolt;
 
+#elif defined SEL4 //SEL4: stub out condition variable funcs
+#define cv_init(cv, cmd) 0
+#define cv_destroy(cv) 0
+#define cv_wait(cv, cmd) 0
+#define cv_wait_sig(cv, cmd) 0
+#define cv_signal(cv) 0
+#define cv_broadcast(cv) 0
+#define cv_timedwait(...) 0
 #endif	/* _KERNEL */
 
 #endif /* _SYS_CONDVAR_H_ */

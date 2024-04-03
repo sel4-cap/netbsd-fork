@@ -281,3 +281,8 @@ struct umass_softc {
 };
 
 #define UMASS_MAX_TRANSFER_SIZE	MAXPHYS
+
+struct umass_wire_methods *get_umass_bbb_methods();
+void *get_umass_scsipi_cb();
+void *get_umass_null_cb();
+uintptr_t *get_umass_wire_state();

@@ -155,7 +155,7 @@
 #endif
 
 /* More types and definitions used throughout the kernel. */
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 #include <sys/cdefs.h>
 #include <sys/errno.h>
 #include <sys/time.h>
@@ -187,7 +187,9 @@
 #endif /* _KERNEL */
 
 /* Signals. */
+#ifndef SEL4
 #include <sys/signal.h>
+#endif
 
 #define	DEV_BSHIFT	9			/* log2(DEV_BSIZE) */
 #define	DEV_BSIZE	(1 << DEV_BSHIFT)	/* 512 */
@@ -512,7 +514,7 @@
 #define	UBC_NWINS	1024
 #endif
 
-#ifdef _KERNEL
+#if defined(_KERNEL) || defined(SEL4)
 extern int hz;
 /*
  * macro to convert from milliseconds to hz without integer overflow

@@ -8,7 +8,7 @@
 struct device;
 typedef struct device *device_t;
 
-#if defined(_KERNEL) || defined(_KMEMUSER)
+#if defined(_KERNEL) || defined(_KMEMUSER) || defined(SEL4)
 typedef enum devact_level {
 	  DEVACT_LEVEL_CLASS	= 0
 	, DEVACT_LEVEL_DRIVER	= 1

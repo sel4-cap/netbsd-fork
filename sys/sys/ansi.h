@@ -33,20 +33,29 @@
 #define	_SYS_ANSI_H_
 
 #include <machine/ansi.h>
+#include <sys/_types.h>
 
 typedef char *		__caddr_t;	/* core address */
+#ifndef SEL4
 typedef __uint32_t	__gid_t;	/* group id */
+#endif
 typedef __uint32_t	__in_addr_t;	/* IP(v4) address */
 typedef __uint16_t	__in_port_t;	/* "Internet" port number */
 typedef __uint32_t	__mode_t;	/* file permissions */
 typedef __uint32_t	__accmode_t;	/* access permissions */
 typedef __int64_t	__off_t;	/* file offset */
+#ifndef SEL4
 typedef __int32_t	__pid_t;	/* process id */
+#endif
 typedef __uint8_t	__sa_family_t;	/* socket address family */
 typedef unsigned int	__socklen_t;	/* socket-related datum length */
+#ifndef SEL4
 typedef __uint32_t	__uid_t;	/* user id */
+#endif
 typedef	__uint64_t	__fsblkcnt_t;	/* fs block count (statvfs) */
+#ifndef SEL4
 typedef	__uint64_t	__fsfilcnt_t;	/* fs file count */
+#endif
 
 struct __tag_wctrans_t;
 typedef struct __tag_wctrans_t *__wctrans_t;

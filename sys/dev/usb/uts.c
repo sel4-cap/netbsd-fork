@@ -61,6 +61,18 @@ __KERNEL_RCSID(0, "$NetBSD: uts.c,v 1.16 2023/05/10 00:12:44 riastradh Exp $");
 #include <dev/wscons/wsmousevar.h>
 #include <dev/wscons/tpcalibvar.h>
 
+#include <sys/kmem.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <shared_ringbuffer.h>
+#include <xhci_api.h>
+
+extern uintptr_t uts_free;
+extern uintptr_t uts_used;
+extern ring_handle_t *uts_buffer_ring;
+
 #ifdef UTS_DEBUG
 #define DPRINTF(x)	if (utsdebug) printf x
 #define DPRINTFN(n,x)	if (utsdebug>(n)) printf x
@@ -93,10 +105,13 @@ struct uts_softc {
 
 #define TSCREEN_FLAGS_MASK (HIO_CONST|HIO_RELATIVE)
 
+#ifndef SEL4
 Static void	uts_intr(void *, void *, u_int);
+#endif
 
 Static int	uts_enable(void *);
 Static void	uts_disable(void *);
+#ifndef SEL4
 Static int	uts_ioctl(void *, u_long, void *, int, struct lwp *);
 
 Static const struct wsmouse_accessops uts_accessops = {
@@ -104,7 +119,7 @@ Static const struct wsmouse_accessops uts_accessops = {
 	uts_ioctl,
 	uts_disable,
 };
-
+#endif
 Static int	uts_match(device_t, cfdata_t, void *);
 Static void	uts_attach(device_t, device_t, void *);
 Static void	uts_childdet(device_t, device_t);
@@ -215,6 +230,9 @@ uts_attach(device_t parent, device_t self, void *aux)
 		} else {
 			aprint_error_dev(sc->sc_dev,
 			    "touchscreen has no range report\n");
+#ifndef SEL4
+            aprint_debug("SEL4 debug: Touchscreen has no Z\n");
+#endif
 			return;
 		}
 	}
@@ -231,10 +249,12 @@ uts_attach(device_t parent, device_t self, void *aux)
 		sc->sc_loc_z.pos, sc->sc_loc_z.size));
 #endif
 
+	#ifndef SEL4
 	a.accessops = &uts_accessops;
 	a.accesscookie = sc;
 
 	sc->sc_wsmousedev = config_found(self, &a, wsmousedevprint, CFARGS_NONE);
+	#endif
 
 	/* calibrate the touchscreen */
 	memset(&sc->sc_calibcoords, 0, sizeof(sc->sc_calibcoords));
@@ -260,9 +280,15 @@ uts_attach(device_t parent, device_t self, void *aux)
 		hid_end_parse(d);
 	}
 	tpcalib_init(&sc->sc_tpcalib);
+	#ifndef SEL4
 	tpcalib_ioctl(&sc->sc_tpcalib, WSMOUSEIO_SCALIBCOORDS,
 	    (void *)&sc->sc_calibcoords, 0, 0);
+	#endif
+    uts_enable(sc); //seL4: moved to enable touchscreen
 
+    uts_buffer_ring = kmem_alloc(sizeof(*uts_buffer_ring), 0);
+    ring_init(uts_buffer_ring, (ring_buffer_t *)uts_free, (ring_buffer_t *)uts_used, NULL, 1);
+	printf("DEBUG|new touch screen attached\n");
 	return;
 }
 
@@ -275,9 +301,11 @@ uts_detach(device_t self, int flags)
 	__USE(sc);
 	DPRINTF(("uts_detach: sc=%p flags=%d\n", sc, flags));
 
+	#ifndef SEL4
 	error = config_detach_children(self, flags);
 	if (error)
 		return error;
+	#endif
 
 	pmf_device_deregister(self);
 	return 0;
@@ -322,7 +350,7 @@ uts_enable(void *v)
 	sc->sc_enabled = 1;
 	sc->sc_buttons = 0;
 
-	return uhidev_open(sc->sc_hdev, &uts_intr, sc);
+	return uhidev_open(sc->sc_hdev, intr_ptrs->uts, sc);
 }
 
 Static void
@@ -347,6 +375,7 @@ uts_ioctl(void *v, u_long cmd, void *data, int flag, struct lwp *l)
 {
 	struct uts_softc *sc = v;
 
+	#ifndef SEL4
 	switch (cmd) {
 	case WSMOUSEIO_GTYPE:
 		if (sc->flags & UTS_ABS)
@@ -358,11 +387,12 @@ uts_ioctl(void *v, u_long cmd, void *data, int flag, struct lwp *l)
 	case WSMOUSEIO_GCALIBCOORDS:
 		return tpcalib_ioctl(&sc->sc_tpcalib, cmd, data, flag, l);
 	}
+	#endif
 
 	return EPASSTHROUGH;
 }
 
-Static void
+void
 uts_intr(void *cookie, void *ibuf, u_int len)
 {
 	struct uts_softc *sc = cookie;
@@ -391,11 +421,25 @@ uts_intr(void *cookie, void *ibuf, u_int len)
 		DPRINTFN(10,("uts_intr: x:%d y:%d z:%d buttons:%#x\n",
 		    dx, dy, dz, buttons));
 		sc->sc_buttons = buttons;
+
+		int **processed_buf = calloc(sizeof(ibuf), 1);
+
+		processed_buf[0] = (int*) (long) dx;
+		processed_buf[1] = (int*) (long) dy;
+		processed_buf[2] = (int*) (long) dz;
+		processed_buf[3] = (int*) (long) buttons;
+
+		bool empty = ring_empty(uts_buffer_ring->used_ring);
+		int error = enqueue_used(uts_buffer_ring, (uintptr_t) processed_buf, sizeof(ibuf), (void *)0);
+		if (empty)
+			microkit_notify(TOUCHSCREEN_EVENT);
+		#ifndef SEL4
 		if (sc->sc_wsmousedev != NULL) {
 			s = spltty();
 			wsmouse_input(sc->sc_wsmousedev, buttons, dx, dy, dz, 0,
 			    flags);
 			splx(s);
 		}
+		#endif
 	}
 }

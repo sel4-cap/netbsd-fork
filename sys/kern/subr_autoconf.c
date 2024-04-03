@@ -76,6 +76,11 @@
  *	@(#)subr_autoconf.c	8.3 (Berkeley) 5/17/94
  */
 
+/**
+	SEL4: Heavy modifications to this file due to large decoupling from
+	netbsd's calls to kernel. This is only really used for the attach functions
+	to allow for automated calling of correct functions per device
+*/
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: subr_autoconf.c,v 1.314 2023/07/18 11:57:37 riastradh Exp $");
 
@@ -87,9 +92,9 @@ __KERNEL_RCSID(0, "$NetBSD: subr_autoconf.c,v 1.314 2023/07/18 11:57:37 riastrad
 #include <sys/param.h>
 #include <sys/device.h>
 #include <sys/device_impl.h>
-#include <sys/disklabel.h>
+// #include <sys/disklabel.h>
 #include <sys/conf.h>
-#include <sys/kauth.h>
+// #include <sys/kauth.h>
 #include <sys/kmem.h>
 #include <sys/systm.h>
 #include <sys/kernel.h>
@@ -98,15 +103,20 @@ __KERNEL_RCSID(0, "$NetBSD: subr_autoconf.c,v 1.314 2023/07/18 11:57:37 riastrad
 #include <sys/reboot.h>
 #include <sys/kthread.h>
 #include <sys/buf.h>
+#ifndef SEl4
 #include <sys/dirent.h>
 #include <sys/mount.h>
 #include <sys/namei.h>
+#endif
 #include <sys/unistd.h>
 #include <sys/fcntl.h>
+#ifndef SEL4
 #include <sys/lockf.h>
 #include <sys/callout.h>
 #include <sys/devmon.h>
+#endif
 #include <sys/cpu.h>
+#ifndef SEL4
 #include <sys/sysctl.h>
 #include <sys/stdarg.h>
 #include <sys/localcount.h>
@@ -114,8 +124,10 @@ __KERNEL_RCSID(0, "$NetBSD: subr_autoconf.c,v 1.314 2023/07/18 11:57:37 riastrad
 #include <sys/disk.h>
 
 #include <sys/rndsource.h>
+#endif
 
 #include <machine/limits.h>
+#include <stdio.h>
 
 /*
  * Autoconfiguration subroutines.
@@ -124,7 +136,7 @@ __KERNEL_RCSID(0, "$NetBSD: subr_autoconf.c,v 1.314 2023/07/18 11:57:37 riastrad
 /*
  * Device autoconfiguration timings are mixed into the entropy pool.
  */
-static krndsource_t rnd_autoconf_source;
+// static krndsource_t rnd_autoconf_source;
 
 /*
  * ioconf.c exports exactly two names: cfdata and cfroots.  All system
@@ -163,10 +175,12 @@ struct matchinfo {
 	int	pri;
 };
 
+#ifndef SEL4
 struct alldevs_foray {
 	int			af_s;
 	struct devicelist	af_garbage;
 };
+#endif
 
 /*
  * Internal version of the cfargs structure; all versions are
@@ -185,21 +199,29 @@ struct cfargs_internal {
 static char *number(char *, int);
 static void mapply(struct matchinfo *, cfdata_t);
 static void config_devdelete(device_t);
+#ifndef SEL4
 static void config_devunlink(device_t, struct devicelist *);
+#endif
 static void config_makeroom(int, struct cfdriver *);
 static void config_devlink(device_t);
+#ifndef SEL4
 static void config_alldevs_enter(struct alldevs_foray *);
 static void config_alldevs_exit(struct alldevs_foray *);
 static void config_add_attrib_dict(device_t);
+#endif
 static device_t	config_attach_internal(device_t, cfdata_t, void *,
 		    cfprint_t, const struct cfargs_internal *);
 
+#ifndef SEL4
 static void config_collect_garbage(struct devicelist *);
 static void config_dump_garbage(struct devicelist *);
+#endif
 
 static void pmflock_debug(device_t, const char *, int);
 
+#ifndef SEL4
 static device_t deviter_next1(deviter_t *);
+#endif
 static void deviter_reinit(deviter_t *);
 
 struct deferred_config {
@@ -218,7 +240,7 @@ static int interrupt_config_threads = 8;
 static struct deferred_config_head mountroot_config_queue =
 	TAILQ_HEAD_INITIALIZER(mountroot_config_queue);
 static int mountroot_config_threads = 2;
-static lwp_t **mountroot_config_lwpids;
+// static lwp_t **mountroot_config_lwpids;
 static size_t mountroot_config_lwpids_size;
 bool root_is_mounted = false;
 
@@ -236,14 +258,18 @@ static int config_finalize_done;
 
 /* list of all devices */
 static struct devicelist alldevs = TAILQ_HEAD_INITIALIZER(alldevs);
+#ifndef SEL4
 static kmutex_t alldevs_lock __cacheline_aligned;
+#endif
 static devgen_t alldevs_gen = 1;
 static int alldevs_nread = 0;
 static int alldevs_nwrite = 0;
 static bool alldevs_garbage = false;
 
+#ifndef SEL4
 static struct devicelist config_pending =
     TAILQ_HEAD_INITIALIZER(config_pending);
+#endif
 static kmutex_t config_misc_lock;
 static kcondvar_t config_misc_cv;
 
@@ -255,12 +281,14 @@ static bool detachall = false;
 static bool config_initialized = false;	/* config_init() has been called. */
 
 static int config_do_twiddle;
+#ifndef SEL4
 static callout_t config_twiddle_ch;
 
 static void sysctl_detach_setup(struct sysctllog **);
 
 int no_devmon_insert(const char *, prop_dictionary_t);
 int (*devmon_insert_vec)(const char *, prop_dictionary_t) = no_devmon_insert;
+#endif
 
 typedef int (*cfdriver_fn)(struct cfdriver *);
 static int
@@ -269,7 +297,7 @@ frob_cfdrivervec(struct cfdriver * const *cfdriverv,
 	const char *style, bool dopanic)
 {
 	void (*pr)(const char *, ...) __printflike(1, 2) =
-	    dopanic ? panic : printf;
+	    dopanic ? printf : printf;
 	int i, error = 0, e2 __diagused;
 
 	for (i = 0; cfdriverv[i] != NULL; i++) {
@@ -301,7 +329,7 @@ frob_cfattachvec(const struct cfattachinit *cfattachv,
 {
 	const struct cfattachinit *cfai = NULL;
 	void (*pr)(const char *, ...) __printflike(1, 2) =
-	    dopanic ? panic : printf;
+	    dopanic ? printf : printf;
 	int j = 0, error = 0, e2 __diagused;
 
 	for (cfai = &cfattachv[0]; cfai->cfai_name != NULL; cfai++) {
@@ -365,7 +393,7 @@ config_init(void)
 	mutex_init(&config_misc_lock, MUTEX_DEFAULT, IPL_NONE);
 	cv_init(&config_misc_cv, "cfgmisc");
 
-	callout_init(&config_twiddle_ch, CALLOUT_MPSAFE);
+	// callout_init(&config_twiddle_ch, CALLOUT_MPSAFE);
 
 	frob_cfdrivervec(cfdriver_list_initial,
 	    config_cfdriver_attach, NULL, "bootstrap", true);
@@ -375,12 +403,15 @@ config_init(void)
 	initcftable.ct_cfdata = cfdata;
 	TAILQ_INSERT_TAIL(&allcftables, &initcftable, ct_list);
 
+#ifndef SEL4
 	rnd_attach_source(&rnd_autoconf_source, "autoconf", RND_TYPE_UNKNOWN,
 	    RND_FLAG_COLLECT_TIME);
+#endif
 
 	config_initialized = true;
 }
 
+#ifndef SEL4
 /*
  * Init or fini drivers and attachments.  Either all or none
  * are processed (via rollback).  It would be nice if this were
@@ -615,6 +646,7 @@ devmon_report_device(device_t dev, bool isattach)
 	if ((*devmon_insert_vec)(what, ev) != 0)
 		prop_object_release(ev);
 }
+#endif
 
 /*
  * Add a cfdriver to the system.
@@ -636,6 +668,7 @@ config_cfdriver_attach(struct cfdriver *cd)
 	return 0;
 }
 
+#ifndef SEL4
 /*
  * Remove a cfdriver from the system.
  */
@@ -668,6 +701,7 @@ config_cfdriver_detach(struct cfdriver *cd)
 
 	return 0;
 }
+#endif
 
 /*
  * Look up a cfdriver by name.
@@ -709,6 +743,7 @@ config_cfattach_attach(const char *driver, struct cfattach *ca)
 	return 0;
 }
 
+#ifndef SEL4
 /*
  * Remove a cfattach from the specified driver.
  */
@@ -743,6 +778,7 @@ config_cfattach_detach(const char *driver, struct cfattach *ca)
 
 	return 0;
 }
+#endif			
 
 /*
  * Look up a cfattach by name.
@@ -753,8 +789,10 @@ config_cfattach_lookup_cd(struct cfdriver *cd, const char *atname)
 	struct cfattach *ca;
 
 	LIST_FOREACH(ca, &cd->cd_attach, ca_list) {
-		if (STREQ(ca->ca_name, atname))
+		if (STREQ(ca->ca_name, atname)) {
+			aprint_debug("SEL4: found %s\n", ca->ca_name);
 			return ca;
+		}
 	}
 
 	return NULL;
@@ -840,6 +878,7 @@ cfdriver_get_iattr(const struct cfdriver *cd, const char *ia)
 	return 0;
 }
 
+#ifndef SEL4
 static int __diagused
 cfdriver_iattr_count(const struct cfdriver *cd)
 {
@@ -854,6 +893,7 @@ cfdriver_iattr_count(const struct cfdriver *cd)
 	}
 	return i;
 }
+#endif
 
 /*
  * Lookup an interface attribute description by name.
@@ -923,6 +963,7 @@ cfparent_match(const device_t parent, const struct cfparent *cfp)
 	return 0;
 }
 
+#ifndef SEL4
 /*
  * Helper for config_cfdata_attach(): check all devices whether it could be
  * parent any attachment in the config data table passed, and rescan.
@@ -1040,6 +1081,7 @@ config_cfdata_detach(cfdata_t cf)
 out:	KERNEL_UNLOCK_ONE(NULL);
 	return error;
 }
+#endif
 
 /*
  * Invoke the "match" routine for a cfdata entry on behalf of
@@ -1050,11 +1092,12 @@ config_match(device_t parent, cfdata_t cf, void *aux)
 {
 	struct cfattach *ca;
 
-	KASSERT(KERNEL_LOCKED_P());
+	// KASSERT(KERNEL_LOCKED_P());
 
 	ca = config_cfattach_lookup(cf->cf_name, cf->cf_atname);
 	if (ca == NULL) {
 		/* No attachment for this entry, oh well. */
+		printf("NO ATTACHMENT\n");
 		return 0;
 	}
 
@@ -1142,6 +1185,7 @@ config_search_internal(device_t parent, void *aux,
 	cfdata_t cf;
 	struct matchinfo m;
 
+#ifndef SEL4
 	KASSERT(config_initialized);
 	KASSERTMSG((!args->iattr ||
 		cfdriver_get_iattr(parent->dv_cfdriver, args->iattr)),
@@ -1157,6 +1201,7 @@ config_search_internal(device_t parent, void *aux,
 	    device_xname(parent),
 	    cfdriver_iattr_count(parent->dv_cfdriver),
 	    parent->dv_cfdriver->cd_name);
+#endif
 
 	m.fn = args->submatch;		/* N.B. union */
 	m.parent = parent;
@@ -1192,11 +1237,17 @@ config_search_internal(device_t parent, void *aux,
 			    !STREQ(args->iattr, cfdata_ifattr(cf)))
 				continue;
 
-			if (cfparent_match(parent, cf->cf_pspec))
+			if (parent->dv_parent == NULL) {
 				mapply(&m, cf);
+			}
+			else if (cfparent_match(parent, cf->cf_pspec)) {
+			  	mapply(&m, cf);
+			}
 		}
 	}
+#ifndef SEL4
 	rnd_add_uint32(&rnd_autoconf_source, 0);
+#endif
 	return m.match;
 }
 
@@ -1212,6 +1263,7 @@ config_search(device_t parent, void *aux, const struct cfargs *cfargs)
 	return cf;
 }
 
+#ifndef SEL4
 /*
  * Find the given root device.
  * This is much like config_search, but there is no parent.
@@ -1249,6 +1301,7 @@ static const char * const msgs[] = {
 [UNCONF]	=	" not configured\n",
 [UNSUPP]	=	" unsupported\n",
 };
+#endif
 
 /*
  * The given `aux' argument describes a device that has been found
@@ -1278,13 +1331,16 @@ config_found_acquire(device_t parent, void *aux, cfprint_t print,
 
 	if (print) {
 		if (config_do_twiddle && cold)
-			twiddle();
+			printf("(not) twiddling\n");
+			// twiddle();
 
 		const int pret = (*print)(aux, device_xname(parent));
 		KASSERT(pret >= 0);
+#ifndef SEL4
 		KASSERT(pret < __arraycount(msgs));
 		KASSERT(msgs[pret] != NULL);
 		aprint_normal("%s", msgs[pret]);
+#endif
 	}
 
 	dev = NULL;
@@ -1317,11 +1373,12 @@ config_found(device_t parent, void *aux, cfprint_t print,
 	dev = config_found_acquire(parent, aux, print, cfargs);
 	if (dev == NULL)
 		return NULL;
-	device_release(dev);
+	// device_release(dev);
 
 	return dev;
 }
 
+#ifndef SEL4
 /*
  * As above, but for root devices.
  */
@@ -1339,6 +1396,7 @@ config_rootfound(const char *rootname, void *aux)
 	KERNEL_UNLOCK_ONE(NULL);
 	return dev;
 }
+#endif
 
 /* just like sprintf(buf, "%d") except that it works from the end */
 static char *
@@ -1354,6 +1412,7 @@ number(char *ep, int n)
 	return ep;
 }
 
+#ifndef SEL4
 /*
  * Expand the size of the cd_devs array if necessary.
  *
@@ -1416,6 +1475,7 @@ config_makeroom(int n, struct cfdriver *cd)
 	KASSERT(mutex_owned(&alldevs_lock));
 	alldevs_nwrite--;
 }
+#endif
 
 /*
  * Put dev into the devices list.
@@ -1424,6 +1484,7 @@ static void
 config_devlink(device_t dev)
 {
 
+#ifndef SEL4
 	mutex_enter(&alldevs_lock);
 
 	KASSERT(device_cfdriver(dev)->cd_devs[dev->dv_unit] == dev);
@@ -1434,8 +1495,10 @@ config_devlink(device_t dev)
 	 */
 	TAILQ_INSERT_TAIL(&alldevs, dev, dv_list);
 	mutex_exit(&alldevs_lock);
+#endif
 }
 
+#ifndef SEL4
 static void
 config_devfree(device_t dev)
 {
@@ -1561,6 +1624,7 @@ config_unit_alloc(device_t dev, cfdriver_t cd, cfdata_t cf)
 
 	return unit;
 }
+#endif
 
 static device_t
 config_devalloc(const device_t parent, const cfdata_t cf,
@@ -1570,7 +1634,7 @@ config_devalloc(const device_t parent, const cfdata_t cf,
 	cfattach_t ca;
 	size_t lname, lunit;
 	const char *xunit;
-	int myunit;
+	int myunit = 0;
 	char num[10];
 	device_t dev;
 	void *dev_private;
@@ -1604,6 +1668,7 @@ config_devalloc(const device_t parent, const cfdata_t cf,
 	dev->dv_activity_handlers = NULL;
 	dev->dv_private = dev_private;
 	dev->dv_flags = ca->ca_flags;	/* inherit flags from class */
+#ifndef SEL4
 	dev->dv_attaching = curlwp;
 
 	myunit = config_unit_alloc(dev, cd, cf);
@@ -1611,6 +1676,7 @@ config_devalloc(const device_t parent, const cfdata_t cf,
 		config_devfree(dev);
 		return NULL;
 	}
+#endif
 
 	/* compute length of name and decimal expansion of unit number */
 	lname = strlen(cd->cd_name);
@@ -1619,7 +1685,9 @@ config_devalloc(const device_t parent, const cfdata_t cf,
 	if (lname + lunit > sizeof(dev->dv_xname))
 		panic("config_devalloc: device name too long");
 
+#ifndef SEL4
 	dvl = device_getlock(dev);
+#endif
 
 	mutex_init(&dvl->dvl_mtx, MUTEX_DEFAULT, IPL_NONE);
 	cv_init(&dvl->dvl_cv, "pmfsusp");
@@ -1641,6 +1709,7 @@ config_devalloc(const device_t parent, const cfdata_t cf,
 		memcpy(dev->dv_locators, args->locators,
 		    sizeof(int) * ia->ci_loclen);
 	}
+#ifndef SEL4
 	dev->dv_properties = prop_dictionary_create();
 	KASSERT(dev->dv_properties != NULL);
 
@@ -1659,6 +1728,7 @@ config_devalloc(const device_t parent, const cfdata_t cf,
 
 	if (dev->dv_cfdriver->cd_attrs != NULL)
 		config_add_attrib_dict(dev);
+#endif
 
 	return dev;
 }
@@ -1691,6 +1761,7 @@ config_devalloc(const device_t parent, const cfdata_t cf,
  * </array>
  */
 
+#ifndef SEL4
 static void
 config_add_attrib_dict(device_t dev)
 {
@@ -1741,6 +1812,7 @@ config_add_attrib_dict(device_t dev)
 
 	return;
 }
+#endif
 
 /*
  * Attach a found device.
@@ -1771,7 +1843,8 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 	config_devlink(dev);
 
 	if (config_do_twiddle && cold)
-		twiddle();
+		// twiddle();
+		printf("twiddling!\n");
 	else
 		aprint_naive("Found ");
 	/*
@@ -1805,6 +1878,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 			}
 		}
 	}
+#ifndef SEL4
 	device_register(dev, aux);
 
 	/* Let userland know */
@@ -1821,6 +1895,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 	 * the caller has released the device.
 	 */
 	device_acquire(dev);
+#endif
 
 	/* Call the driver's attach function.  */
 	(*dev->dv_cfattach->ca_attach)(parent, dev, aux);
@@ -1830,7 +1905,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 	 * that the driver's attach function is done.
 	 */
 	mutex_enter(&config_misc_lock);
-	KASSERT(dev->dv_attaching == curlwp);
+	// KASSERT(dev->dv_attaching == curlwp);
 	dev->dv_attaching = NULL;
 	cv_broadcast(&config_misc_cv);
 	mutex_exit(&config_misc_lock);
@@ -1845,6 +1920,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 	deferred = (dev->dv_pending != 0);
 	mutex_exit(&config_misc_lock);
 
+#ifndef SEL4
 	if (!deferred && !device_pmf_is_registered(dev))
 		aprint_debug_dev(dev,
 		    "WARNING: power management not supported\n");
@@ -1853,6 +1929,7 @@ config_attach_internal(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 
 	device_register_post_config(dev, aux);
 	rnd_add_uint32(&rnd_autoconf_source, 0);
+#endif
 	return dev;
 }
 
@@ -1895,11 +1972,12 @@ config_attach(device_t parent, cfdata_t cf, void *aux, cfprint_t print,
 	dev = config_attach_acquire(parent, cf, aux, print, cfargs);
 	if (dev == NULL)
 		return NULL;
-	device_release(dev);
+	// device_release(dev);
 
 	return dev;
 }
 
+#ifndef SEL4
 /*
  * As above, but for pseudo-devices.  Pseudo-devices attached in this
  * way are silently inserted into the device tree, and their children
@@ -2038,6 +2116,7 @@ config_dump_garbage(struct devicelist *garbage)
 		config_devdelete(dv);
 	}
 }
+#endif
 
 static int
 config_detach_enter(device_t dev)
@@ -2058,6 +2137,7 @@ config_detach_enter(device_t dev)
 	 *
 	 * XXX Not all callers do this!
 	 */
+#ifndef SEL4
 	while (dev->dv_pending || dev->dv_detaching) {
 		KASSERTMSG(dev->dv_detaching != curlwp,
 		    "recursively detaching %s", device_xname(dev));
@@ -2065,6 +2145,7 @@ config_detach_enter(device_t dev)
 		if (error)
 			goto out;
 	}
+#endif
 
 	/*
 	 * Attach has completed, and no other concurrent detach is
@@ -2079,12 +2160,13 @@ config_detach_enter(device_t dev)
 	    "lwp %ld [%s] @ %p detaching %s",
 	    (long)l->l_lid, (l->l_name ? l->l_name : l->l_proc->p_comm), l,
 	    device_xname(dev));
-	dev->dv_detaching = curlwp;
+	// dev->dv_detaching = curlwp;
 
 out:	mutex_exit(&config_misc_lock);
 	return error;
 }
 
+#ifndef SEL4
 static void
 config_detach_exit(device_t dev)
 {
@@ -2799,6 +2881,7 @@ config_alldevs_exit(struct alldevs_foray *af)
 	mutex_exit(&alldevs_lock);
 	config_dump_garbage(&af->af_garbage);
 }
+#endif
 
 /*
  * device_lookup:
@@ -2842,6 +2925,7 @@ device_lookup_private(cfdriver_t cd, int unit)
 
 	return device_private(device_lookup(cd, unit));
 }
+#ifndef SEL4
 
 /*
  * device_lookup_acquire:
@@ -2967,6 +3051,7 @@ device_find_by_driver_unit(const char *name, int unit)
 		return NULL;
 	return device_lookup(cd, unit);
 }
+#endif
 
 static bool
 match_strcmp(const char * const s1, const char * const s2)
@@ -2974,11 +3059,13 @@ match_strcmp(const char * const s1, const char * const s2)
 	return strcmp(s1, s2) == 0;
 }
 
+#ifndef SEL4
 static bool
 match_pmatch(const char * const s1, const char * const s2)
 {
 	return pmatch(s1, s2, NULL) == 2;
 }
+#endif
 
 static bool
 strarray_match_internal(const char ** const strings,
@@ -3015,6 +3102,7 @@ strarray_match(const char ** const strings, unsigned int const nstrings,
 	return 0;
 }
 
+#ifndef SEL4
 static int
 strarray_pmatch(const char ** const strings, unsigned int const nstrings,
     const char * const pattern)
@@ -3027,6 +3115,7 @@ strarray_pmatch(const char ** const strings, unsigned int const nstrings,
 	}
 	return 0;
 }
+#endif
 
 static int
 device_compatible_match_strarray_internal(
@@ -3054,6 +3143,7 @@ device_compatible_match_strarray_internal(
 	return 0;
 }
 
+#ifndef SEL4
 /*
  * device_compatible_match:
  *
@@ -3083,6 +3173,7 @@ device_compatible_pmatch(const char **device_compats, int ndevice_compats,
 	return device_compatible_match_strarray_internal(device_compats,
 	    ndevice_compats, driver_compats, NULL, strarray_pmatch);
 }
+#endif
 
 static int
 device_compatible_match_strlist_internal(
@@ -3127,6 +3218,7 @@ device_compatible_match_strlist(
 	    device_compatsize, driver_compats, NULL, strlist_match);
 }
 
+#ifndef SEL4
 /*
  * device_compatible_pmatch_strlist:
  *
@@ -3179,6 +3271,7 @@ device_compatible_match_id(
 	return device_compatible_match_id_internal(id, (uintptr_t)-1,
 	    sentinel_id, driver_compats, NULL);
 }
+#endif
 
 /*
  * device_compatible_lookup:
@@ -3199,6 +3292,7 @@ device_compatible_lookup(const char **device_compats, int ndevice_compats,
 	return NULL;
 }
 
+#ifndef SEL4
 /*
  * device_compatible_plookup:
  *
@@ -3217,6 +3311,7 @@ device_compatible_plookup(const char **device_compats, int ndevice_compats,
 	}
 	return NULL;
 }
+#endif
 
 /*
  * device_compatible_lookup_strlist:
@@ -3239,6 +3334,7 @@ device_compatible_lookup_strlist(
 	return NULL;
 }
 
+#ifndef SEL4
 /*
  * device_compatible_plookup_strlist:
  *
@@ -3690,6 +3786,7 @@ device_active_deregister(device_t dev, void (*handler)(device_t, devactive_t))
 	}
 	old_handlers[i] = NULL;
 }
+#endif
 
 /* Return true iff the device_t `dev' exists at generation `gen'. */
 static bool
@@ -3911,6 +4008,7 @@ cfdata_ifattr(const struct cfdata *cf)
 	return cf->cf_pspec->cfp_iattr;
 }
 
+#ifndef SEL4
 bool
 ifattr_match(const char *snull, const char *t)
 {
@@ -3934,3 +4032,4 @@ sysctl_detach_setup(struct sysctllog **clog)
 		NULL, 0, &detachall, 0,
 		CTL_KERN, CTL_CREATE, CTL_EOL);
 }
+#endif

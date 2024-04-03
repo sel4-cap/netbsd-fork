@@ -9,7 +9,7 @@
  * Copyright 2012 Kim Phillips, Freescale Semiconductor.
  */
 
-#if defined(_KERNEL) || defined(_STANDALONE)
+#if defined(_KERNEL) || defined(_STANDALONE) || defined(SEL4)
 #include <sys/param.h>
 #include <sys/types.h>
 #include <lib/libkern/libkern.h>

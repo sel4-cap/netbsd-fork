@@ -97,7 +97,7 @@ typedef	uint64_t	u_int64_t;
 
 #include <machine/endian.h>
 
-#if defined(_NETBSD_SOURCE)
+#if defined(_NETBSD_SOURCE) || defined(SEL4)
 typedef	unsigned char	u_char;
 typedef	unsigned short	u_short;
 typedef	unsigned int	u_int;
@@ -202,10 +202,10 @@ typedef uint64_t	rlim_t;		/* resource limit */
 typedef	int32_t		segsz_t;	/* segment size */
 typedef	int32_t		swblk_t;	/* swap offset */
 
-#ifndef	uid_t
-typedef	__uid_t		uid_t;		/* user id */
-#define	uid_t		__uid_t
-#endif
+ #ifndef	uid_t
+ typedef	__uid_t		uid_t;		/* user id */
+ #define	uid_t		__uid_t
+ #endif
 
 typedef int		mqd_t;
 
@@ -213,7 +213,9 @@ typedef	unsigned long	cpuid_t;
 
 typedef	int		psetid_t;
 
+#ifndef SEL4
 typedef volatile __cpu_simple_lock_nv_t __cpu_simple_lock_t;
+#endif
 
 #if defined(_KERNEL) || defined(_STANDALONE)
 
@@ -279,10 +281,11 @@ typedef int32_t __devmajor_t, __devminor_t;
 				 (((dev_t)(y) <<  0) & 0x000000ffU)))
 #endif
 
-#ifdef	_BSD_CLOCK_T_
-typedef	_BSD_CLOCK_T_		clock_t;
-#undef	_BSD_CLOCK_T_
-#endif
+#ifndef SEL4
+ #ifdef	_BSD_CLOCK_T_
+ typedef	_BSD_CLOCK_T_		clock_t;
+ #undef	_BSD_CLOCK_T_
+ #endif
 
 #ifdef	_BSD_PTRDIFF_T_
 typedef	_BSD_PTRDIFF_T_		ptrdiff_t;
@@ -294,15 +297,18 @@ typedef	_BSD_SIZE_T_		size_t;
 #define _SIZE_T
 #undef	_BSD_SIZE_T_
 #endif
-
-#ifdef	_BSD_SSIZE_T_
-typedef	_BSD_SSIZE_T_		ssize_t;
-#undef	_BSD_SSIZE_T_
 #endif
 
+ #ifdef	_BSD_SSIZE_T_
+ typedef	_BSD_SSIZE_T_		ssize_t;
+ #undef	_BSD_SSIZE_T_
+ #endif
+
+#ifndef SEL4
 #ifdef	_BSD_TIME_T_
 typedef	_BSD_TIME_T_		time_t;
 #undef	_BSD_TIME_T_
+#endif
 #endif
 
 #ifdef	_BSD_CLOCKID_T_
@@ -332,7 +338,7 @@ typedef	_BSD_USECONDS_T_	useconds_t;
 
 typedef struct kauth_cred *kauth_cred_t;
 
-typedef int pri_t;
+ typedef int pri_t;
 
 #endif
 
@@ -366,7 +372,9 @@ struct	uio;
 #if !defined(_KERNEL) && !defined(_STANDALONE)
 #if (_POSIX_C_SOURCE - 0L) >= 199506L || (_XOPEN_SOURCE - 0) >= 500 || \
     defined(_NETBSD_SOURCE)
+#ifndef SEL4
 #include <pthread_types.h>
+#endif
 #endif
 #endif
 

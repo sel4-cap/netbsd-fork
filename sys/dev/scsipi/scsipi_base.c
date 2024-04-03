@@ -63,6 +63,9 @@ __KERNEL_RCSID(0, "$NetBSD: scsipi_base.c,v 1.189 2022/04/09 23:38:32 riastradh 
 
 #include <machine/param.h>
 
+#include <sys/kmem.h>
+#include <stdio.h>
+
 SDT_PROVIDER_DEFINE(scsi);
 
 SDT_PROBE_DEFINE3(scsi, base, tag, get,
@@ -119,7 +122,9 @@ static void	scsipi_adapter_unlock(struct scsipi_adapter *adapt);
 
 static void	scsipi_update_timeouts(struct scsipi_xfer *xs);
 
+#ifndef SEL4
 static struct pool scsipi_xfer_pool;
+#endif
 
 int scsipi_xs_count = 0;
 
@@ -139,9 +144,11 @@ scsipi_init(void)
 	scsipi_init_done = 1;
 
 	/* Initialize the scsipi_xfer pool. */
+#ifndef SEL4
 	pool_init(&scsipi_xfer_pool, sizeof(struct scsipi_xfer), 0,
 	    0, 0, "scxspl", NULL, IPL_BIO);
 	pool_prime(&scsipi_xfer_pool, 1);
+#endif
 
 	scsipi_ioctl_init();
 }
@@ -263,15 +270,19 @@ scsipi_lookup_periph_internal(struct scsipi_channel *chan, int target, int lun, 
 
 	hash = scsipi_chan_periph_hash(target, lun);
 
+#ifndef SEL4
 	if (lock)
 		mutex_enter(chan_mtx(chan));
+#endif
 	LIST_FOREACH(periph, &chan->chan_periphtab[hash], periph_hash) {
 		if (periph->periph_target == target &&
 		    periph->periph_lun == lun)
 			break;
 	}
+#ifndef SEL4
 	if (lock)
 		mutex_exit(chan_mtx(chan));
+#endif
 
 	return periph;
 }
@@ -525,8 +536,12 @@ scsipi_get_xs(struct scsipi_periph *periph, int flags)
 		mutex_exit(chan_mtx(periph->periph_channel));
 
 	SC_DEBUG(periph, SCSIPI_DB3, ("calling pool_get\n"));
+#ifndef SEL4
 	xs = pool_get(&scsipi_xfer_pool,
 	    ((flags & XS_CTL_NOSLEEP) != 0 ? PR_NOWAIT : PR_WAITOK));
+#else 
+	xs = kmem_alloc(sizeof(*xs),0);
+#endif
 	if (xs == NULL) {
 		if (lock)
 			mutex_enter(chan_mtx(periph->periph_channel));
@@ -582,7 +597,9 @@ scsipi_put_xs(struct scsipi_xfer *xs)
 
 	TAILQ_REMOVE(&periph->periph_xferq, xs, device_q);
 	callout_destroy(&xs->xs_callout);
+#ifndef SEL4 // May need in future
 	pool_put(&scsipi_xfer_pool, xs);
+#endif
 
 #ifdef DIAGNOSTIC
 	if ((periph->periph_flags & PERIPH_RECOVERY_ACTIVE) != 0 &&
@@ -608,12 +625,14 @@ scsipi_put_xs(struct scsipi_xfer *xs)
 		periph->periph_flags &= ~PERIPH_WAITING;
 		cv_broadcast(periph_cv_periph(periph));
 	} else {
+#ifndef SEL4
 		if (periph->periph_switch->psw_start != NULL &&
 		    device_is_active(periph->periph_dev)) {
 			SC_DEBUG(periph, SCSIPI_DB2,
 			    ("calling private start()\n"));
 			(*periph->periph_switch->psw_start)(periph);
 		}
+#endif
 	}
 }
 
@@ -1421,7 +1440,11 @@ scsipi_get_opcodeinfo(struct scsipi_periph *periph)
 	 *     if timeout exists insert maximum into opcode table
 	 */
 
+#ifndef SEL4
 	data = malloc(len, M_DEVBUF, M_WAITOK|M_ZERO);
+#else 
+	data = kmem_alloc(len, 0);
+#endif
 
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.opcode = SCSI_MAINTENANCE_IN;
@@ -1443,8 +1466,12 @@ scsipi_get_opcodeinfo(struct scsipi_periph *periph)
 		SC_DEBUG(periph, SCSIPI_DB3,
 			 ("CMD  LEN  SA    spec  nom. time  cmd timeout\n"));
 
+#ifndef SEL4
 		struct scsipi_opcodes *tot = malloc(sizeof(struct scsipi_opcodes),
 		    M_DEVBUF, M_WAITOK|M_ZERO);
+#else
+		struct scsipi_opcodes *tot = kmem_alloc(sizeof(struct scsipi_opcodes),0);
+#endif
 
 		count = 0;
                 while (tot != NULL &&
@@ -1497,7 +1524,11 @@ scsipi_get_opcodeinfo(struct scsipi_periph *periph)
 		if (count > 0) {
 			periph->periph_opcs = tot;
 		} else {
+#ifndef SEL4
 			free(tot, M_DEVBUF);
+#else
+			kmem_free(tot,0);
+#endif
 			SC_DEBUG(periph, SCSIPI_DB3,
 			 	("no usable timeout values available\n"));
 		}
@@ -1509,7 +1540,11 @@ scsipi_get_opcodeinfo(struct scsipi_periph *periph)
 			  "values available\n", rc));
 	}
 
+#ifndef SEL4
 	free(data, M_DEVBUF);
+#else
+	kmem_free(data, 0);
+#endif
 }
 
 /*
@@ -1569,7 +1604,11 @@ void
 scsipi_free_opcodeinfo(struct scsipi_periph *periph)
 {
 	if (periph->periph_opcs != NULL) {
+#ifndef SEL4
 		free(periph->periph_opcs, M_DEVBUF);
+#else
+		kmem_free(periph->periph_opcs,0);
+#endif
 	}
 
 	periph->periph_opcs = NULL;
@@ -1849,7 +1888,9 @@ scsipi_complete(struct scsipi_xfer *xs)
 			if ((xs->xs_control & XS_CTL_POLL) ||
 			    (chan->chan_flags & SCSIPI_CHAN_TACTIVE) == 0) {
 				/* XXX: quite extreme */
+#ifndef SEL4
 				kpause("xsbusy", false, hz, chan_mtx(chan));
+#endif
 			} else if (!callout_pending(&periph->periph_callout)) {
 				scsipi_periph_freeze_locked(periph, 1);
 				callout_reset(&periph->periph_callout,
@@ -2400,8 +2441,10 @@ scsipi_completion_thread(void *arg)
 			scsipi_adapter_request(chan,
 			    ADAPTER_REQ_GROW_RESOURCES, NULL);
 			scsipi_channel_thaw(chan, 1);
+#ifndef SEL4
 			if (chan->chan_tflags & SCSIPI_CHANT_GROWRES)
 				kpause("scsizzz", FALSE, hz/10, NULL);
+#endif
 			mutex_enter(chan_mtx(chan));
 			continue;
 		}
@@ -2686,7 +2729,9 @@ scsipi_target_detach(struct scsipi_channel *chan, int target, int lun,
 				continue;
 			tdev = periph->periph_dev;
 			mutex_exit(chan_mtx(chan));
+#ifndef SEL4
 			error = config_detach(tdev, flags);
+#endif
 			if (error)
 				goto out;
 			mutex_enter(chan_mtx(chan));
@@ -2712,6 +2757,7 @@ scsipi_adapter_addref(struct scsipi_adapter *adapt)
 {
 	int error = 0;
 
+#ifndef SEL4
 	if (atomic_inc_uint_nv(&adapt->adapt_refcnt) == 1
 	    && adapt->adapt_enable != NULL) {
 		scsipi_adapter_lock(adapt);
@@ -2720,6 +2766,13 @@ scsipi_adapter_addref(struct scsipi_adapter *adapt)
 		if (error)
 			atomic_dec_uint(&adapt->adapt_refcnt);
 	}
+#else
+	if (adapt->adapt_enable != NULL) {
+		scsipi_adapter_lock(adapt);
+		error = scsipi_adapter_enable(adapt, 1);
+		scsipi_adapter_unlock(adapt);
+	}
+#endif
 	return error;
 }
 
@@ -2733,6 +2786,7 @@ void
 scsipi_adapter_delref(struct scsipi_adapter *adapt)
 {
 
+#ifndef SEL4
 	membar_release();
 	if (atomic_dec_uint_nv(&adapt->adapt_refcnt) == 0
 	    && adapt->adapt_enable != NULL) {
@@ -2741,6 +2795,7 @@ scsipi_adapter_delref(struct scsipi_adapter *adapt)
 		(void) scsipi_adapter_enable(adapt, 0);
 		scsipi_adapter_unlock(adapt);
 	}
+#endif
 }
 
 static struct scsipi_syncparam {
@@ -2862,7 +2917,7 @@ scsipi_adapter_enable(struct scsipi_adapter *adapt, int enable)
 	return error;
 }
 
-#ifdef SCSIPI_DEBUG
+#if defined(SCSIPI_DEBUG) || defined(SEL4)
 /*
  * Given a scsipi_xfer, dump the request, in all its glory
  */

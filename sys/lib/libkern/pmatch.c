@@ -32,7 +32,7 @@
 #include <sys/param.h>
 
 /* So we can build this in userland for the tests in strlist.c */
-#if defined(_KERNEL) || defined(_STANDALONE)
+#if defined(_KERNEL) || defined(_STANDALONE) || defined(SEL4)
 #include <lib/libkern/libkern.h>
 #else
 int pmatch(const char *, const char *, const char **);

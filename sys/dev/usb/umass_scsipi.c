@@ -50,7 +50,7 @@ __KERNEL_RCSID(0, "$NetBSD: umass_scsipi.c,v 1.70 2021/12/31 14:24:16 riastradh 
 #include <sys/kernel.h>
 #include <sys/kmem.h>
 #include <sys/lwp.h>
-#include <sys/malloc.h>
+#include <stdlib.h>
 #include <sys/systm.h>
 
 /* SCSI & ATAPI */
@@ -77,6 +77,15 @@ __KERNEL_RCSID(0, "$NetBSD: umass_scsipi.c,v 1.70 2021/12/31 14:24:16 riastradh 
 
 #include <dev/usb/umassvar.h>
 #include <dev/usb/umass_scsipi.h>
+#include <microkit.h>
+#include <stdio.h>
+#include <shared_ringbuffer.h>
+#include <xhci_api.h>
+
+extern blk_queue_handle_t *umass_buffer_ring;
+
+extern struct umass_wire_methods *umass_bbb_methods_pointer;
+extern struct umass_wire_methods *umass_bbb_methods_pointer_other;
 
 struct umass_scsipi_softc {
 	struct umassbus_softc	base;
@@ -96,8 +105,10 @@ struct umass_scsipi_softc {
 Static void umass_scsipi_request(struct scsipi_channel *,
 				 scsipi_adapter_req_t, void *);
 Static void umass_scsipi_minphys(struct buf *);
+#ifndef SEL4
 Static int umass_scsipi_ioctl(struct scsipi_channel *, u_long,
 			      void *, int, proc_t *);
+#endif
 Static int umass_scsipi_getgeom(struct scsipi_periph *,
 				struct disk_parms *, u_long);
 
@@ -110,9 +121,18 @@ Static void umass_scsipi_sense_cb(struct umass_softc *, void *,
 
 Static struct umass_scsipi_softc *umass_scsipi_setup(struct umass_softc *);
 
+void *get_umass_scsipi_cb() {
+	return &umass_scsipi_cb;
+}
+
+void *get_umass_null_cb() {
+	return &umass_null_cb;
+}
+
 #if NATAPIBUS > 0
 Static void umass_atapi_probe_device(struct atapibus_softc *, int);
 
+#ifndef SEL4
 const struct scsipi_bustype umass_atapi_bustype = {
 	.bustype_type = SCSIPI_BUSTYPE_ATAPI,
 	.bustype_cmd = atapi_scsipi_cmd,
@@ -122,6 +142,7 @@ const struct scsipi_bustype umass_atapi_bustype = {
 	.bustype_async_event_xfer_mode = NULL,
 };
 #endif
+#endif /* NATAPIBUS */
 
 
 #if NSCSIBUS > 0
@@ -156,7 +177,7 @@ umass_scsi_detach(struct umass_softc *sc)
 	kmem_free(scbus, sizeof(*scbus));
 	sc->bus = NULL;
 }
-#endif
+#endif /* NATAPIBUS */
 
 #if NATAPIBUS > 0
 int
@@ -168,6 +189,7 @@ umass_atapi_attach(struct umass_softc *sc)
 	KASSERT(KERNEL_LOCKED_P());
 
 	scbus = umass_scsipi_setup(sc);
+#ifndef SEL4
 	scbus->sc_atapi_adapter.atapi_probe_device =  umass_atapi_probe_device;
 
 	scbus->sc_channel.chan_bustype = &umass_atapi_bustype;
@@ -180,6 +202,7 @@ umass_atapi_attach(struct umass_softc *sc)
 	scbus->base.sc_child =
 	    config_found(sc->sc_dev, &scbus->sc_channel, atapiprint,
 			 CFARGS(.iattr = "atapi"));
+#endif
 
 	return 0;
 }
@@ -211,8 +234,8 @@ umass_scsipi_setup(struct umass_softc *sc)
 	scbus->sc_adapter.adapt_dev = sc->sc_dev;
 	scbus->sc_adapter.adapt_nchannels = 1;
 	scbus->sc_adapter.adapt_request = umass_scsipi_request;
-	scbus->sc_adapter.adapt_minphys = umass_scsipi_minphys;
-	scbus->sc_adapter.adapt_ioctl = umass_scsipi_ioctl;
+	//scbus->sc_adapter.adapt_minphys = umass_scsipi_minphys;
+	//scbus->sc_adapter.adapt_ioctl = umass_scsipi_ioctl;
 	scbus->sc_adapter.adapt_getgeom = umass_scsipi_getgeom;
 	scbus->sc_adapter.adapt_flags = SCSIPI_ADAPT_MPSAFE;
 
@@ -310,7 +333,7 @@ umass_scsipi_request(struct scsipi_channel *chan,
 						  cmdlen, xs->data,
 						  xs->datalen, dir,
 						  xs->timeout, USBD_SYNCHRONOUS,
-						  umass_null_cb, xs);
+						  intr_ptrs->umass_null_cb, xs);
 			DPRINTFM(UDMASS_SCSI, "done err=%jd",
 			    scbus->sc_sync_status, 0, 0, 0);
 			switch (scbus->sc_sync_status) {
@@ -328,11 +351,14 @@ umass_scsipi_request(struct scsipi_channel *chan,
 		} else {
 			DPRINTFM(UDMASS_SCSI, "async dir=%jd, cmdlen=%jd"
 			    " datalen=%jd", dir, cmdlen, xs->datalen, 0);
+			if(sc->sc_methods == umass_bbb_methods_pointer_other) {
+				sc->sc_methods = umass_bbb_methods_pointer;
+			}
 			sc->sc_methods->wire_xfer(sc, periph->periph_lun, cmd,
 						  cmdlen, xs->data,
 						  xs->datalen, dir,
 						  xs->timeout, 0,
-						  umass_scsipi_cb, xs);
+						  intr_ptrs->umass_scsipi_cb, xs);
 			return;
 		}
 
@@ -349,6 +375,7 @@ umass_scsipi_request(struct scsipi_channel *chan,
 Static void
 umass_scsipi_minphys(struct buf *bp)
 {
+#ifndef SEL4
 #ifdef DIAGNOSTIC
 	if (bp->b_bcount <= 0) {
 		printf("umass_scsipi_minphys count(%d) <= 0\n",
@@ -359,8 +386,9 @@ umass_scsipi_minphys(struct buf *bp)
 	if (bp->b_bcount > UMASS_MAX_TRANSFER_SIZE)
 		bp->b_bcount = UMASS_MAX_TRANSFER_SIZE;
 	minphys(bp);
+#endif
 }
-
+#ifndef SEL4
 int
 umass_scsipi_ioctl(struct scsipi_channel *chan, u_long cmd,
     void *arg, int flag, proc_t *p)
@@ -379,6 +407,7 @@ umass_scsipi_ioctl(struct scsipi_channel *chan, u_long cmd,
 		return ENOTTY;
 	}
 }
+#endif
 
 Static int
 umass_scsipi_getgeom(struct scsipi_periph *periph, struct disk_parms *dp,
@@ -413,6 +442,16 @@ Static void
 umass_null_cb(struct umass_softc *sc, void *priv, int residue, int status)
 {
 	UMASSHIST_FUNC(); UMASSHIST_CALLED();
+
+	int dev_id = usbd_get_sel4_id(sc->sc_udev);
+	int* buf = malloc(sizeof(dev_id));
+	*buf = dev_id;
+
+	// sending back dev_id, but not necessary in sddf
+	blk_enqueue_resp(umass_buffer_ring, SUCCESS, buf, sizeof(buf), 1, 1);
+
+	// Read / Write complete
+	microkit_notify(UMASS_COMPLETE);
 }
 
 Static void
@@ -505,6 +544,7 @@ umass_scsipi_sense_cb(struct umass_softc *sc, void *priv, int residue,
 	case STATUS_CMD_OK:
 	case STATUS_CMD_UNKNOWN:
 		/* getting sense data succeeded */
+#ifndef SEL4
 		extra = sizeof(xs->sense.scsi_sense)
 		      - sizeof(xs->sense.scsi_sense.extra_bytes);
 		if (residue <= extra)
@@ -512,10 +552,13 @@ umass_scsipi_sense_cb(struct umass_softc *sc, void *priv, int residue,
 		else
 			xs->error = XS_SHORTSENSE;
 		break;
+#endif
 	default:
 		DPRINTFM(UDMASS_SCSI, "sc %#jx: Autosense failed, status %jd",
 		    (uintptr_t)sc, status, 0, 0);
+#ifndef SEL4
 		xs->error = XS_DRIVER_STUFFUP;
+#endif
 		break;
 	}
 
@@ -543,20 +586,25 @@ umass_atapi_probe_device(struct atapibus_softc *atapi, int target)
 		return;
 
 	/* skip if already attached */
+#ifndef SEL4
 	if (scsipi_lookup_periph(chan, target, 0) != NULL) {
 		return;
 	}
 
 	periph = scsipi_alloc_periph(M_WAITOK);
+#endif
 	DIF(UDMASS_UPPER, periph->periph_dbflags |= 1); /* XXX 1 */
+#ifndef SEL4
 	periph->periph_channel = chan;
 	periph->periph_switch = &atapi_probe_periphsw;
 	periph->periph_target = target;
 	periph->periph_quirks = chan->chan_defquirks;
+#endif
 
 	DPRINTFM(UDMASS_SCSI, "doing inquiry", 0, 0, 0, 0);
 	/* Now go ask the device all about itself. */
 	memset(&inqbuf, 0, sizeof(inqbuf));
+#ifndef SEL4
 	if (scsipi_inquire(periph, &inqbuf, XS_CTL_DISCOVERY) != 0) {
 		DPRINTFM(UDMASS_SCSI, "scsipi_inquire failed", 0, 0, 0, 0);
 		free(periph, M_DEVBUF);
@@ -582,6 +630,7 @@ umass_atapi_probe_device(struct atapibus_softc *atapi, int target)
 	sa.sa_inqptr = NULL;
 
 	atapi_probe_device(atapi, target, periph, &sa);
+#endif
 	/* atapi_probe_device() frees the periph when there is no device.*/
 }
 #endif

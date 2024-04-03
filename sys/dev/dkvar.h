@@ -54,7 +54,9 @@ struct dk_softc {
 	int			 sc_dtype;	/* disk type */
 	struct buf		*sc_deferred;	/* retry after start failed */
 	int			 sc_busy;	/* processing buffers */
+#ifndef SEL4
 	krndsource_t		 sc_rnd_source;	/* entropy source */
+#endif
 };
 
 /* sc_flags:

@@ -76,6 +76,10 @@ struct kmutex {
 
 #ifdef __MUTEX_PRIVATE
 
+// SEL4: noops
+#define mutex_init(d, f, i) NULL
+#define mutex_enter(d) NULL
+
 #define	mtx_owner		u.mtxa_owner
 #define	mtx_ipl			u.s.mtxs_ipl
 #define	mtx_lock		u.s.mtxs_lock

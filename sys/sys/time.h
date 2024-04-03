@@ -37,6 +37,14 @@
 #include <sys/featuretest.h>
 #include <sys/types.h>
 
+#ifdef SEL4 // SEL4: time not needed, stubbed out
+typedef int time_t;
+typedef int suseconds_t;
+struct timeval {
+	time_t    	tv_sec;		/* seconds */
+	suseconds_t	tv_usec;	/* and microseconds */
+};
+#else
 /*
  * Structure returned by gettimeofday(2) system call,
  * and used in other calls.
@@ -346,4 +354,5 @@ __END_DECLS
 
 #endif	/* !_STANDALONE */
 #endif /* !_KERNEL */
+#endif /* SEL4 */
 #endif /* !_SYS_TIME_H_ */

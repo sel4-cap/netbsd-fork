@@ -65,6 +65,7 @@ __KERNEL_RCSID(0, "$NetBSD: scsiconf.c,v 1.303 2022/10/15 18:42:49 jmcneill Exp 
 #include <sys/queue.h>
 #include <sys/atomic.h>
 #include <sys/kmem.h>
+#include <stdio.h>
 
 #include <dev/scsipi/scsi_all.h>
 #include <dev/scsipi/scsipi_all.h>
@@ -102,7 +103,7 @@ CFATTACH_DECL3_NEW(scsibus, sizeof(struct scsibus_softc),
     scsibusrescan, scsidevdetached, DVF_DETACH_SHUTDOWN);
 
 extern struct cfdriver scsibus_cd;
-
+#ifndef SEL4
 static dev_type_open(scsibusopen);
 static dev_type_close(scsibusclose);
 static dev_type_ioctl(scsibusioctl);
@@ -121,6 +122,7 @@ const struct cdevsw scsibus_cdevsw = {
 	.d_discard = nodiscard,
 	.d_flag = D_OTHER | D_MPSAFE
 };
+#endif
 
 static int	scsibusprint(void *, const char *);
 static void	scsibus_discover_thread(void *);
@@ -189,6 +191,7 @@ scsibusattach(device_t parent, device_t self, void *aux)
 			chan->chan_adapter->adapt_max_periph = 256;
 	}
 
+#ifndef SEL4
 	if (atomic_inc_uint_nv(&chan_running(chan)) == 1)
 		mutex_init(chan_mtx(chan), MUTEX_DEFAULT, IPL_BIO);
 
@@ -198,14 +201,16 @@ scsibusattach(device_t parent, device_t self, void *aux)
 
 	if (scsipi_adapter_addref(chan->chan_adapter))
 		return;
-
+#endif
+	
 	RUN_ONCE(&scsi_conf_ctrl, scsibus_init);
+	scsibus_init();
 
 	/* Initialize the channel structure first */
 	chan->chan_init_cb = NULL;
 	chan->chan_init_cb_arg = NULL;
 
-	scsi_initq = malloc(sizeof(struct scsi_initq), M_DEVBUF, M_WAITOK);
+	scsi_initq = kmem_alloc(sizeof(struct scsi_initq), 0);
 	scsi_initq->sc_channel = chan;
 	TAILQ_INSERT_TAIL(&scsi_initq_head, scsi_initq, scsi_initq);
         config_pending_incr(sc->sc_dev);
@@ -214,15 +219,19 @@ scsibusattach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
-        /*
-         * Create the discover thread
-         */
-        if (kthread_create(PRI_NONE, 0, NULL, scsibus_discover_thread, sc,
-            &chan->chan_dthread, "%s-d", chan->chan_name)) {
-                aprint_error_dev(sc->sc_dev, "unable to create discovery "
-		    "thread for channel %d\n", chan->chan_channel);
-                return;
-        }
+	/*
+	 * Create the discover thread
+	 */
+#ifndef SEL4
+	if (kthread_create(PRI_NONE, 0, NULL, scsibus_discover_thread, sc,
+		&chan->chan_dthread, "%s-d", chan->chan_name)) {
+			aprint_error_dev(sc->sc_dev, "unable to create discovery "
+		"thread for channel %d\n", chan->chan_channel);
+			return;
+	}
+#else 
+	scsibus_config(sc);
+#endif
 }
 
 static void
@@ -250,7 +259,9 @@ scsibus_config(struct scsibus_softc *sc)
 		    "waiting %d seconds for devices to settle...\n",
 		    SCSI_DELAY);
 		/* ...an identifier we know no one will use... */
+#ifndef SEL4
 		kpause("scsidly", false, SCSI_DELAY * hz, NULL);
+#endif
 	}
 
 	/* Make sure the devices probe in scsibus order to avoid jitter. */
@@ -270,7 +281,9 @@ scsibus_config(struct scsibus_softc *sc)
 	cv_broadcast(&scsibus_qcv);
 	mutex_exit(&scsibus_qlock);
 
+#ifndef SEL4
 	free(scsi_initq, M_DEVBUF);
+#endif
 
 	scsipi_adapter_delref(chan->chan_adapter);
 
@@ -280,6 +293,7 @@ scsibus_config(struct scsibus_softc *sc)
 static int
 scsibusdetach(device_t self, int flags)
 {
+#ifndef SEL4
 	struct scsibus_softc *sc = device_private(self);
 	struct scsipi_channel *chan = sc->sc_channel;
 	int error;
@@ -313,6 +327,7 @@ scsibusdetach(device_t self, int flags)
 		membar_acquire();
 		mutex_destroy(chan_mtx(chan));
 	}
+#endif
 
 	return 0;
 }
@@ -483,7 +498,9 @@ scsi_probe_bus(struct scsibus_softc *sc, int target, int lun)
 	 * Some HBAs provide an abstracted view of the bus; give them an
 	 * opportunity to re-scan it before we do.
 	 */
+#ifndef SEL4
 	scsipi_adapter_ioctl(chan, SCBUSIOLLSCAN, NULL, 0, curproc);
+#endif
 
 	if ((error = scsipi_adapter_addref(chan->chan_adapter)) != 0)
 		goto ret;
@@ -520,6 +537,7 @@ scsibusrescan(device_t sc, const char *ifattr, const int *locators)
 static void
 scsidevdetached(device_t self, device_t child)
 {
+#ifndef SEL4
 	struct scsibus_softc *sc = device_private(self);
 	struct scsipi_channel *chan = sc->sc_channel;
 	struct scsipi_periph *periph;
@@ -537,6 +555,7 @@ scsidevdetached(device_t self, device_t child)
 	scsipi_free_periph(periph);
 
 	mutex_exit(chan_mtx(chan));
+#endif
 }
 
 /*
@@ -1007,7 +1026,9 @@ scsi_probe_device(struct scsibus_softc *sc, int target, int lun)
 	sa.scsipi_info.scsi_version = inqbuf.version;
 	sa.sa_inqptr = &inqbuf;
 
-	finger = scsipi_inqmatch(
+	finger = 0;
+	// TODO: add this to ^^
+	scsipi_inqmatch(
 	    &sa.sa_inqbuf, scsi_quirk_patterns,
 	    sizeof(scsi_quirk_patterns)/sizeof(scsi_quirk_patterns[0]),
 	    sizeof(scsi_quirk_patterns[0]), &priority);
@@ -1122,7 +1143,9 @@ scsi_probe_device(struct scsibus_softc *sc, int target, int lun)
 	return (docontinue);
 
 bad:
+#ifndef SEL4
 	scsipi_free_periph(periph);
+#endif
 	return (docontinue);
 }
 
@@ -1167,6 +1190,7 @@ scsibusclose(dev_t dev, int flag, int fmt,
 static int
 scsibusioctl(dev_t dev, u_long cmd, void *addr, int flag, struct lwp *l)
 {
+#ifndef SEL4
 	struct scsibus_softc *sc;
 	struct scsipi_channel *chan;
 	int error;
@@ -1215,4 +1239,7 @@ scsibusioctl(dev_t dev, u_long cmd, void *addr, int flag, struct lwp *l)
 	}
 
 	return (error);
+#else
+	return 0;
+#endif
 }

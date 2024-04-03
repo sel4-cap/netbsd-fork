@@ -33,6 +33,40 @@
 #ifndef _SYS_SDT_H
 #define	_SYS_SDT_H
 
+#ifdef SEL4 //SEL4: we do not want SDT
+#define SDT_PROBE_DEFINE(prov, mod, func, name) __nothing
+#define SDT_PROBE_DECLARE(prov, mod, func, name) __nothing
+#define SDT_PROVIDER_DEFINE(prov)
+#define SDT_PROVIDER_DECLARE(prov)
+#define SDT_PROBE(prov, mod, func, name, arg0, arg1, arg2, arg3, arg4)	      \
+	__nothing
+#define SDT_PROBE_ARGTYPE(prov, mod, func, name, num, type, xtype)
+
+#define	SDT_PROBE_DEFINE0(prov, mod, func, name)
+#define	SDT_PROBE_DEFINE1(prov, mod, func, name, arg0)
+#define	SDT_PROBE_DEFINE2(prov, mod, func, name, arg0, arg1)
+#define	SDT_PROBE_DEFINE3(prov, mod, func, name, arg0, arg1, arg2)
+#define	SDT_PROBE_DEFINE4(prov, mod, func, name, arg0, arg1, arg2, arg3)
+#define	SDT_PROBE_DEFINE5(prov, mod, func, name, arg0, arg1, arg2, arg3, arg4)
+#define	SDT_PROBE_DEFINE6(prov, mod, func, name, arg0, arg1, arg2,      \
+    arg3, arg4, arg5)
+#define	SDT_PROBE_DEFINE7(prov, mod, func, name, arg0, arg1, arg2,      \
+    arg3, arg4, arg5, arg6)
+
+#define	SDT_PROBE0(prov, mod, func, name)			__nothing
+#define	SDT_PROBE1(prov, mod, func, name, arg0)			__nothing
+#define	SDT_PROBE2(prov, mod, func, name, arg0, arg1)		__nothing
+#define	SDT_PROBE3(prov, mod, func, name, arg0, arg1, arg2)	__nothing
+#define	SDT_PROBE4(prov, mod, func, name, arg0, arg1, arg2, arg3)	      \
+	__nothing
+#define	SDT_PROBE5(prov, mod, func, name, arg0, arg1, arg2, arg3, arg4)	      \
+	__nothing
+#define	SDT_PROBE6(prov, mod, func, name, arg0, arg1, arg2, arg3, arg4, arg5) \
+	__nothing
+#define	SDT_PROBE7(prov, mod, func, name, arg0, arg1, arg2, arg3, arg4, arg5, \
+    arg6)								      \
+	__nothing
+#else
 #ifndef _KERNEL
 
 #define	_DTRACE_VERSION	1
@@ -505,5 +539,6 @@ void sdt_exit(void);
 
 
 #endif /* _KERNEL */
+#endif /* SEL4 */
 
 #endif /* _SYS_SDT_H */

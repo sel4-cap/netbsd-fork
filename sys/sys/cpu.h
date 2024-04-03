@@ -1,4 +1,4 @@
-/*	$NetBSD: cpu.h,v 1.54 2024/03/05 20:59:41 thorpej Exp $	*/
+/*	$NetBSD: cpu.h,v 1.52 2023/07/08 13:59:05 riastradh Exp $	*/
 
 /*-
  * Copyright (c) 2007 YAMAMOTO Takashi,
@@ -94,6 +94,9 @@ u_int	cpu_intr_count(struct cpu_info *);
 void	cpu_topology_set(struct cpu_info *, u_int, u_int, u_int, u_int);
 void	cpu_topology_setspeed(struct cpu_info *, bool);
 void	cpu_topology_init(void);
+#else
+#define	cpu_intr_p() 0
+#define	cpu_softintr_p() 0
 #endif
 
 #ifdef _KERNEL

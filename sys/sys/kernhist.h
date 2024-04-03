@@ -37,6 +37,7 @@
 #endif
 
 #include <sys/queue.h>
+#include <sys/cpu.h>
 #ifdef KERNHIST
 #include <sys/cpu.h>
 #endif
@@ -46,7 +47,7 @@
  */
 
 struct kern_history_ent {
-	struct bintime bt; 		/* time stamp */
+	// struct bintime bt; 		/* time stamp */
 	uint32_t cpunum;
 	const char *fmt;		/* printf format */
 	size_t fmtlen;			/* length of printf format */
@@ -79,7 +80,7 @@ struct kern_history {
 
 /* info for a single history event */
 struct sysctl_history_event {
-	struct bintime	she_bintime;
+	// struct bintime	she_bintime;
 	uintmax_t	she_values[4];
 	uint32_t	she_callnumber;
 	uint32_t	she_cpunum;
@@ -180,6 +181,7 @@ do { \
 #define KERNHIST_DELAY	100000
 #endif
 
+#define KERNHIST_PRINT
 #if defined(KERNHIST_PRINT)
 extern int kernhist_print_enabled;
 #define KERNHIST_PRINTNOW(E) \
@@ -249,7 +251,7 @@ kernhist_entry_print(const struct kern_history_ent *e, void (*pr)(const char *, 
 {
 	struct timeval tv;
 
-	bintime2timeval(&e->bt, &tv);
+	// bintime2timeval(&e->bt, &tv);
 	pr("%06ld.%06ld ", (long int)tv.tv_sec, (long int)tv.tv_usec);
 	pr("%s#%" PRIu32 "@%" PRIu32 ": ", e->fn, e->call, e->cpunum);
 	pr(e->fmt, e->v[0], e->v[1], e->v[2], e->v[3]);

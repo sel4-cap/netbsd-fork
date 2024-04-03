@@ -42,6 +42,7 @@
 
 /* 7.18.2.1 Limits of exact-width integer types */
 
+#ifndef SEL4 //SEL4: stubbed out: provided by compiler
 /* minimum values of exact-width signed integer types */
 #define	INT8_MIN		(-__INT8_MAX__-1)
 #define	INT16_MIN		(-__INT16_MAX__-1)
@@ -127,4 +128,5 @@
 /* limit of size_t */
 #define	SIZE_MAX	__SIZE_MAX__
 
+#endif /* !SEL4 */
 #endif /* _SYS_COMMON_INT_LIMITS_H_ */

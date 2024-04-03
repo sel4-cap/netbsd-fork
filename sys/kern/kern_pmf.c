@@ -51,7 +51,9 @@ __KERNEL_RCSID(0, "$NetBSD: kern_pmf.c,v 1.51 2022/08/24 11:41:39 riastradh Exp 
 #include <sys/vfs_syscalls.h>
 
 /* XXX ugly special case, but for now the only client */
+#ifndef SEL4
 #include "wsdisplay.h"
+#endif
 #if NWSDISPLAY > 0
 #include <dev/wscons/wsdisplayvar.h>
 #endif

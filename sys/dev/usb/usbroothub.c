@@ -1,4 +1,4 @@
-/* $NetBSD: usbroothub.c,v 1.16 2024/02/04 05:43:06 mrg Exp $ */
+/* $NetBSD: usbroothub.c,v 1.15 2022/03/13 11:28:52 riastradh Exp $ */
 
 /*-
  * Copyright (c) 1998, 2004, 2011, 2012 The NetBSD Foundation, Inc.
@@ -7,7 +7,7 @@
  * This code is derived from software contributed to The NetBSD Foundation
  * by Lennart Augustsson (lennart@augustsson.net) at
  * Carlstedt Research & Technology, Jared D. McNeill (jmcneill@invisible.ca),
- * Matthew R. Green (mrg@eterna23.net) and Nick Hudson.
+ * Matthew R. Green (mrg@eterna.com.au) and Nick Hudson.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -58,7 +58,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: usbroothub.c,v 1.16 2024/02/04 05:43:06 mrg Exp $");
+__KERNEL_RCSID(0, "$NetBSD: usbroothub.c,v 1.15 2022/03/13 11:28:52 riastradh Exp $");
 
 #include <sys/param.h>
 #include <sys/systm.h>		/* for ostype */
@@ -78,7 +78,7 @@ static void		roothub_ctrl_close(struct usbd_pipe *);
 static void		roothub_ctrl_done(struct usbd_xfer *);
 static void		roothub_noop(struct usbd_pipe *pipe);
 
-const struct usbd_pipe_methods roothub_ctrl_methods = {
+struct usbd_pipe_methods roothub_ctrl_methods = {
 	.upm_transfer =	roothub_ctrl_transfer,
 	.upm_start =	roothub_ctrl_start,
 	.upm_abort =	roothub_ctrl_abort,
@@ -472,7 +472,7 @@ roothub_ctrl_start(struct usbd_xfer *xfer)
 			break;
 		case C(1, UDESC_STRING):
 			/* Vendor */
-			buflen = usb_makestrdesc(sd, len, ostype);
+			buflen = usb_makestrdesc(sd, len, "seL4"); //SEL4: added vendor for roothub
 			break;
 		case C(2, UDESC_STRING):
 			/* Product */
@@ -557,7 +557,7 @@ roothub_ctrl_start(struct usbd_xfer *xfer)
 	if (!bus->ub_usepolling)
 		mutex_exit(bus->ub_lock);
 
-	actlen = bus->ub_methods->ubm_rhctrl(bus, req, buf, buflen);
+	actlen = xhci_bus_methods_ptr->ubm_rhctrl(bus, req, buf, buflen);
 
 	if (!bus->ub_usepolling)
 		mutex_enter(bus->ub_lock);

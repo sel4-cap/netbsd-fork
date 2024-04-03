@@ -30,6 +30,7 @@
 #define	_SYS_KMEM_H_
 
 #include <sys/types.h>
+#include <microkit.h>
 
 typedef unsigned int km_flag_t;
 
@@ -39,6 +40,10 @@ size_t	kmem_roundup_size(size_t);
 void *	kmem_alloc(size_t, km_flag_t);
 void *	kmem_zalloc(size_t, km_flag_t);
 void	kmem_free(void *, size_t);
+
+#define kmem_zalloc(size, km_flag_t) (void*) microkit_msginfo_get_label(microkit_ppcall(31, seL4_MessageInfo_new(size, 1, 0, 0)));
+#define kmem_alloc(size, km_flag_t) (void*) microkit_msginfo_get_label(microkit_ppcall(30, seL4_MessageInfo_new(size, 1, 0, 0)));
+#define kmem_free(addr, size_t) microkit_msginfo_get_label(microkit_ppcall(32, seL4_MessageInfo_new((uintptr_t)addr, 1, 0, 0)));
 
 void *	kmem_intr_alloc(size_t, km_flag_t);
 void *	kmem_intr_zalloc(size_t, km_flag_t);
@@ -53,6 +58,8 @@ void	kmem_strfree(char *);
 
 void *	kmem_tmpbuf_alloc(size_t, void *, size_t, km_flag_t);
 void	kmem_tmpbuf_free(void *, size_t, void *);
+#define kmem_tmpbuf_alloc(size, ptr, size2, flag) kmem_alloc(size, flag)
+#define kmem_tmpbuf_free(ptr, size, buf) kmem_free(ptr, size)
 
 /*
  * km_flag_t values:

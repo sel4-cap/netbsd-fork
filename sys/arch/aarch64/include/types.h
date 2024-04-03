@@ -90,7 +90,9 @@ typedef struct label_t {	/* Used by setjmp & longjmp */
 /*
  * This should have always been an 8-bit type.
  */
+#ifndef SEL4
 typedef	unsigned char	__cpu_simple_lock_nv_t;
+#endif
 typedef __uint64_t __register_t;
 
 #define __SIMPLELOCK_LOCKED	1

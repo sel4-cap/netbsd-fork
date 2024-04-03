@@ -82,4 +82,14 @@ void	scsi_scsipi_cmd(struct scsipi_xfer *);
 void	scsi_async_event_xfer_mode(struct scsipi_channel *, void *);
 void	scsi_fc_sas_async_event_xfer_mode(struct scsipi_channel *, void *);
 
+// SEL4: read and write funcs
+void read_block(int, int, int, void*);
+void write_block(int, int, int, void*);
+
+// SEL4: disk geom funcs
+uint16_t get_umass_cyls(int dev_id);
+uint16_t get_umass_heads(int dev_id);
+uint16_t get_umass_blocks(int dev_id);
+uint16_t get_umass_blocksize(int dev_id);
+uint64_t get_umass_size(int dev_id);
 #endif /* _DEV_SCSIPI_SCSICONF_H_ */

@@ -66,7 +66,7 @@
  *
  *	@(#)buf.h	8.9 (Berkeley) 3/30/95
  */
-
+#ifndef SEL4
 #if !defined(_KERNEL)
 #error not supposed to be exposed to userland.
 #endif
@@ -104,3 +104,4 @@ struct buf *bufq_peek(struct bufq_state *);
 struct buf *bufq_cancel(struct bufq_state *, struct buf *);
 const char *bufq_getstrategyname(struct bufq_state *);
 void	bufq_move(struct bufq_state *, struct bufq_state *);
+#endif

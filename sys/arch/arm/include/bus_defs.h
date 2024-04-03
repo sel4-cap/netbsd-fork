@@ -64,6 +64,11 @@
 #ifndef _ARM_BUS_DEFS_H_
 #define _ARM_BUS_DEFS_H_
 
+//seL4 includes
+#include <sys/types.h>
+#include <arm/types.h>
+#include <stddef.h>
+#include <sys/proc.h>
 #if defined(_KERNEL_OPT)
 #include "opt_arm_bus_space.h"
 #include "opt_kasan.h"

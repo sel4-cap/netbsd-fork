@@ -80,6 +80,7 @@ __KERNEL_RCSID(0, "$NetBSD: subr_disk.c,v 1.137 2023/05/09 12:04:04 riastradh Ex
 #include <sys/sysctl.h>
 #include <lib/libkern/libkern.h>
 
+#include <stdio.h>
 /*
  * Disk error is the preface to plaintive error messages
  * about failing disk transfers.  It prints messages of the form
@@ -101,6 +102,7 @@ void
 diskerr(const struct buf *bp, const char *dname, const char *what, int pri,
     int blkdone, const struct disklabel *lp)
 {
+#ifndef SEL4
 	int unit = DISKUNIT(bp->b_dev), part = DISKPART(bp->b_dev);
 	void (*pr)(const char *, ...) __printflike(1, 2);
 	char partname = 'a' + part;
@@ -137,6 +139,7 @@ diskerr(const struct buf *bp, const char *dname, const char *what, int pri,
 		(*pr)(" tn %" PRIdaddr " sn %" PRIdaddr ")",
 		    sn / lp->d_nsectors, sn % lp->d_nsectors);
 	}
+#endif
 }
 
 /*
@@ -146,9 +149,11 @@ diskerr(const struct buf *bp, const char *dname, const char *what, int pri,
 struct disk *
 disk_find(const char *name)
 {
-	struct io_stats *stat;
+	struct io_stats *stat = NULL;
 
+#ifndef SEL4
 	stat = iostat_find(name);
+#endif
 
 	if ((stat != NULL) && (stat->io_type == IOSTAT_DISK))
 		return stat->io_parent;
@@ -183,7 +188,9 @@ disk_rename(struct disk *diskp, const char *name)
 {
 
 	diskp->dk_name = name;
+#ifndef SEL4
 	iostat_rename(diskp->dk_stats, diskp->dk_name);
+#endif
 }
 
 /*
@@ -203,7 +210,9 @@ disk_attach(struct disk *diskp)
 	/*
 	 * Set up the stats collection.
 	 */
+#ifndef SEL4
 	diskp->dk_stats = iostat_alloc(IOSTAT_DISK, diskp, diskp->dk_name);
+#endif
 }
 
 int
@@ -235,13 +244,17 @@ disk_detach(struct disk *diskp)
 	/*
 	 * Remove from the drivelist.
 	 */
+#ifndef SEL4
 	iostat_free(diskp->dk_stats);
+#endif
 
 	/*
 	 * Release the disk-info dictionary.
 	 */
 	if (diskp->dk_info) {
+#ifndef SEL4
 		prop_object_release(diskp->dk_info);
+#endif
 		diskp->dk_info = NULL;
 	}
 
@@ -267,7 +280,9 @@ void
 disk_wait(struct disk *diskp)
 {
 
+#ifndef SEL4
 	iostat_wait(diskp->dk_stats);
+#endif
 }
 
 /*
@@ -277,7 +292,9 @@ void
 disk_busy(struct disk *diskp)
 {
 
+#ifndef SEL4
 	iostat_busy(diskp->dk_stats);
+#endif
 }
 
 /*
@@ -287,7 +304,9 @@ void
 disk_unbusy(struct disk *diskp, long bcount, int read)
 {
 
+#ifndef SEL4
 	iostat_unbusy(diskp->dk_stats, bcount, read);
+#endif
 }
 
 /*
@@ -297,7 +316,9 @@ bool
 disk_isbusy(struct disk *diskp)
 {
 
+#ifndef SEL4
 	return iostat_isbusy(diskp->dk_stats);
+#endif
 }
 
 /*
@@ -418,6 +439,8 @@ disk_read_sectors(void (*strat)(struct buf *), const struct disklabel *lp,
     struct buf *bp, unsigned int sector, int count)
 {
 
+#ifndef SEL4
+
 	if ((lp->d_secsize / DEV_BSIZE) == 0 || lp->d_secpercyl == 0)
 		return EINVAL;
 
@@ -428,6 +451,7 @@ disk_read_sectors(void (*strat)(struct buf *), const struct disklabel *lp,
 	bp->b_cylinder = sector / lp->d_secpercyl;
 	(*strat)(bp);
 	return biowait(bp);
+#endif
 }
 
 const char *
@@ -488,8 +512,10 @@ convertdisklabel(struct disklabel *lp, void (*strat)(struct buf *),
 		lp->d_npartitions = RAW_PART + 1;
 		return NULL;
 	} else if (lp->d_npartitions < MAXPARTITIONS) {
+#ifndef SEL4
 		memmove(p + 1, p,
 		    sizeof(struct partition) * (lp->d_npartitions - RAW_PART));
+#endif
 		*p = rp;
 		lp->d_npartitions++;
 		return NULL;
@@ -522,6 +548,7 @@ int
 disk_ioctl(struct disk *dk, dev_t dev, u_long cmd, void *data, int flag,
     struct lwp *l)
 {
+#ifndef SEL4
 	struct dkwedge_info *dkw;
 	struct partinfo *pi;
 	struct partition *dp;
@@ -661,6 +688,7 @@ disk_ioctl(struct disk *dk, dev_t dev, u_long cmd, void *data, int flag,
 	default:
 		return EPASSTHROUGH;
 	}
+#endif
 }
 
 /*
@@ -674,6 +702,7 @@ disk_ioctl(struct disk *dk, dev_t dev, u_long cmd, void *data, int flag,
 void
 disk_set_info(device_t dev, struct disk *dk, const char *type)
 {
+#ifndef SEL4
 	struct disk_geom *dg = &dk->dk_geom;
 
 	if (dg->dg_secsize == 0) {
@@ -749,6 +778,7 @@ disk_set_info(device_t dev, struct disk *dk, const char *type)
 	 */
 	if (odisk_info)
 		prop_object_release(odisk_info);
+#endif
 }
 
 int

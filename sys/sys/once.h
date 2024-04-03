@@ -43,6 +43,10 @@ void once_init(void);
 int _init_once(once_t *, int (*)(void));
 void _fini_once(once_t *, void (*)(void));
 
+#ifdef SEL4
+#define RUN_ONCE(o,fn) 0
+#define ONCE_DECL(o) once_t (o) = {0};
+#else
 #define	ONCE_DECL(o) \
 	once_t (o) = { \
 		.o_status = 0, \
@@ -52,6 +56,7 @@ void _fini_once(once_t *, void (*)(void));
 #define	RUN_ONCE(o, fn) \
     (__predict_true((o)->o_status == ONCE_DONE) ? \
       ((o)->o_error) : _init_once((o), (fn)))
+#endif
 
 #define	INIT_ONCE(o, fn)	_init_once((o), (fn))
 #define	FINI_ONCE(o, fn)	_fini_once((o), (fn))

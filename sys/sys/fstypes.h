@@ -36,6 +36,7 @@
 
 typedef struct { int32_t __fsid_val[2]; } fsid_t; /* file system id type */
 
+typedef struct fhandle	fhandle_t;
 #if defined(_KERNEL)
 /*
  * File identifier.

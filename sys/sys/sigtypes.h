@@ -49,9 +49,11 @@
 #include <machine/int_types.h>
 #include <machine/ansi.h>
 
+#ifndef SEL4
 #ifdef	_BSD_SIZE_T_
 typedef	_BSD_SIZE_T_	size_t;
 #undef	_BSD_SIZE_T_
+#endif
 #endif
 
 #if defined(_POSIX_C_SOURCE) || defined(_XOPEN_SOURCE) || \

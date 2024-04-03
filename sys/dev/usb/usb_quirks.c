@@ -1,4 +1,4 @@
-/*	$NetBSD: usb_quirks.c,v 1.108 2024/02/28 21:52:40 dholland Exp $	*/
+/*	$NetBSD: usb_quirks.c,v 1.107 2023/05/14 23:58:35 pgoyette Exp $	*/
 /*	$FreeBSD: src/sys/dev/usb/usb_quirks.c,v 1.30 2003/01/02 04:15:55 imp Exp $	*/
 
 /*
@@ -32,7 +32,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: usb_quirks.c,v 1.108 2024/02/28 21:52:40 dholland Exp $");
+__KERNEL_RCSID(0, "$NetBSD: usb_quirks.c,v 1.107 2023/05/14 23:58:35 pgoyette Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_usb.h"
@@ -115,7 +115,7 @@ usbd_get_desc_fake(struct usbd_device *dev, int type, int index,
 		   int len, void *desc)
 {
 	USBHIST_FUNC(); USBHIST_CALLED(usbdebug);
-#ifdef USB_DEBUG
+#if defined(USB_DEBUG) || defined(SEL4_USB_DEBUG)
 	const usb_device_descriptor_t *dd = usbd_get_device_descriptor(dev);
 #endif
 	const usb_descriptor_t *ub;
@@ -414,7 +414,11 @@ Static const struct usbd_quirk_entry {
  { 0, 0, 0, { 0, NULL } }
 };
 
-const struct usbd_quirks usbd_no_quirk = { 0 };
+struct usbd_quirks *get_quirks() {
+	return &usbd_no_quirk;
+}
+
+struct usbd_quirks usbd_no_quirk = { 0 };
 
 const struct usbd_quirks *
 usbd_find_quirk(usb_device_descriptor_t *d)

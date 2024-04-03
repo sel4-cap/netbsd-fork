@@ -1,4 +1,4 @@
-/*	$NetBSD: usbdivar.h,v 1.138 2024/02/04 05:43:06 mrg Exp $	*/
+/*	$NetBSD: usbdivar.h,v 1.137 2022/03/13 11:28:52 riastradh Exp $	*/
 
 /*
  * Copyright (c) 1998, 2012 The NetBSD Foundation, Inc.
@@ -6,7 +6,7 @@
  *
  * This code is derived from software contributed to The NetBSD Foundation
  * by Lennart Augustsson (lennart@augustsson.net) at
- * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna23.net).
+ * Carlstedt Research & Technology and Matthew R. Green (mrg@eterna.com.au).
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -76,6 +76,7 @@
 
 #include <sys/callout.h>
 #include <sys/mutex.h>
+#include <sys/condvar.h>
 #include <sys/bus.h>
 
 /* From usb_mem.h */
@@ -110,6 +111,8 @@ struct usbd_bus_methods {
 	int			(*ubm_rhctrl)(struct usbd_bus *,
 				    usb_device_request_t *, void *, int);
 };
+
+extern struct usbd_bus_methods *xhci_bus_methods_ptr;
 
 struct usbd_pipe_methods {
 	int		      (*upm_init)(struct usbd_xfer *);
@@ -198,6 +201,9 @@ struct usbd_bus {
 struct usbd_device {
 	struct usbd_bus	       *ud_bus;		/* our controller */
 	struct usbd_pipe       *ud_pipe0;	/* pipe 0 */
+#ifdef SEL4
+	int sel4_dev_id; /* used for keeping track of devices in api */
+#endif
 	uint8_t			ud_addr;	/* device address */
 	uint8_t			ud_config;	/* current configuration # */
 	uint8_t			ud_depth;	/* distance from root hub */

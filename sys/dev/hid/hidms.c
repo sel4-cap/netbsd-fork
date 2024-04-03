@@ -44,6 +44,16 @@ __KERNEL_RCSID(0, "$NetBSD: hidms.c,v 1.6 2021/08/07 16:19:11 thorpej Exp $");
 
 #include <dev/hid/hid.h>
 #include <dev/hid/hidms.h>
+#include <sys/kmem.h>
+
+#include <shared_ringbuffer.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <xhci_api.h>
+
+extern uintptr_t mse_free;
+extern uintptr_t mse_used;
+extern ring_handle_t *mse_buffer_ring;
 
 #ifdef HIDMS_DEBUG
 #define DPRINTF(x)	if (hidmsdebug) printf x
@@ -249,9 +259,14 @@ hidms_attach(device_t self, struct hidms *ms,
 	a.accessops = ops;
 	a.accesscookie = device_private(self);
 
+#ifndef SEL4
 	ms->hidms_wsmousedev = config_found(self, &a, wsmousedevprint,
 	    CFARGS_NONE);
+#endif
 
+    mse_buffer_ring = kmem_alloc(sizeof(*mse_buffer_ring), 0);
+    ring_init(mse_buffer_ring, (ring_buffer_t *)mse_free, (ring_buffer_t *)mse_used, NULL, 1);
+	printf("DEBUG|new HID mouse attached\n");
 	return;
 }
 
@@ -288,11 +303,26 @@ hidms_intr(struct hidms *ms, void *ibuf, u_int len)
 		DPRINTFN(10, ("hidms_intr: x:%d y:%d z:%d w:%d buttons:0x%x\n",
 			dx, dy, dz, dw, buttons));
 		ms->hidms_buttons = buttons;
+
+		uintptr_t **processed_buf = calloc(sizeof(ibuf), 1);
+
+		processed_buf[0] = (uintptr_t*) (long) dx;
+		processed_buf[1] = (uintptr_t*) (long) dy;
+		processed_buf[2] = (uintptr_t*) (long) dz;
+		processed_buf[3] = (uintptr_t*) (long) dw;
+		processed_buf[4] = (uintptr_t*) (long) buttons;
+
+		bool empty = ring_empty(mse_buffer_ring->used_ring);
+		int error = enqueue_used(mse_buffer_ring, (uintptr_t) processed_buf, sizeof(ibuf), (void *)0);
+		if (empty)
+			microkit_notify(MOUSE_EVENT);
+#ifndef SEL4
 		if (ms->hidms_wsmousedev != NULL) {
 			s = spltty();
 			wsmouse_input(ms->hidms_wsmousedev, buttons, dx, dy, dz,
 			    dw, flags);
 			splx(s);
 		}
+#endif
 	}
 }

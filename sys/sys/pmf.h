@@ -29,7 +29,7 @@
 #ifndef _SYS_PMF_H
 #define _SYS_PMF_H
 
-#if defined(_KERNEL) || defined(_KMEMUSER)
+#if defined(_KERNEL) || defined(_KMEMUSER) || defined(SEL4)
 
 #include <sys/types.h>
 #include <sys/device_if.h>
@@ -141,6 +141,12 @@ pmf_qual_descend_ok(const pmf_qual_t *pq)
 	return pq->pq_actlvl == DEVACT_LEVEL_FULL;
 }
 
+#else
+#define	pmf_device_deregister(...) 0;
+#define	pmf_device_deregister1(...) 0;
+#define pmf_device_register(...) 0
+#define pmf_device_register1(...) 0
+#define pmf_event_inject(...) 0
 #endif /* !_KERNEL */
 
 #endif /* !_SYS_PMF_H */

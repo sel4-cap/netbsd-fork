@@ -114,7 +114,9 @@ __CTASSERT(sizeof(struct work) <= sizeof(TAILQ_ENTRY(buf)));
 struct buf {
 	union {
 		TAILQ_ENTRY(buf) u_actq;
+#ifndef SEL4
 		rb_node_t u_rbnode;
+#endif
 #if defined(_KERNEL)
 		/* u_work is smaller than u_actq */
 		struct work u_work;

@@ -54,6 +54,7 @@
 #endif
 
 #include <dev/dkvar.h>
+#include <sys/device.h>
 
 #ifndef	SDRETRIES
 #define	SDRETRIES	4

@@ -45,6 +45,10 @@ __KERNEL_RCSID(0, "$NetBSD: dwc3_fdt.c,v 1.20 2022/06/12 08:04:07 skrll Exp $");
 
 #include <dev/fdt/fdtvar.h>
 
+#include <wrapper.h>
+#include <timer.h>
+#include <stdio.h>
+
 #define	DWC3_GCTL			0xc110
 #define	 GCTL_PRTCAP			__BITS(13,12)
 #define	  GCTL_PRTCAP_HOST		1
@@ -81,7 +85,9 @@ __KERNEL_RCSID(0, "$NetBSD: dwc3_fdt.c,v 1.20 2022/06/12 08:04:07 skrll Exp $");
 #define	  DCFG_SPEED_SS_PLUS		5
 
 static int	dwc3_fdt_match(device_t, cfdata_t, void *);
+#ifndef SEL4
 static void	dwc3_fdt_attach(device_t, device_t, void *);
+#endif
 
 CFATTACH_DECL2_NEW(dwc3_fdt, sizeof(struct xhci_softc),
 	dwc3_fdt_match, dwc3_fdt_attach, NULL,
@@ -95,6 +101,7 @@ CFATTACH_DECL2_NEW(dwc3_fdt, sizeof(struct xhci_softc),
 	WR4((sc), (reg), RD4((sc), (reg)) | (mask))
 #define	CLR4(sc, reg, mask)			\
 	WR4((sc), (reg), RD4((sc), (reg)) & ~(mask))
+#define delay(us) ms_delay(us/1000)
 
 static void
 dwc3_fdt_soft_reset(struct xhci_softc *sc)
@@ -226,7 +233,7 @@ dwc3_fdt_match(device_t parent, cfdata_t cf, void *aux)
 	return of_compatible_match(faa->faa_phandle, compat_data);
 }
 
-static void
+void
 dwc3_fdt_attach(device_t parent, device_t self, void *aux)
 {
 	struct xhci_softc * const sc = device_private(self);
@@ -284,6 +291,7 @@ dwc3_fdt_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
+#ifndef SEL4 // clocks not necessary
 	/* Enable clocks */
 	fdtbus_clock_assign(phandle);
 	for (n = 0; (clk = fdtbus_clock_get_index(phandle, n)) != NULL; n++)
@@ -291,6 +299,7 @@ dwc3_fdt_attach(device_t parent, device_t self, void *aux)
 			aprint_error(": couldn't enable clock #%d\n", n);
 			return;
 		}
+#endif
 	/* De-assert resets */
 	for (n = 0; (rst = fdtbus_reset_get_index(phandle, n)) != NULL; n++)
 		if (fdtbus_reset_deassert(rst) != 0) {
@@ -307,12 +316,16 @@ dwc3_fdt_attach(device_t parent, device_t self, void *aux)
 	sc->sc_dev = self;
 	sc->sc_bus.ub_hcpriv = sc;
 	sc->sc_bus.ub_dmatag = faa->faa_dmat;
-	sc->sc_ios = size;
+	// sc->sc_ios = size;
 	sc->sc_iot = faa->faa_bst;
+#ifndef SEL4
 	if (bus_space_map(sc->sc_iot, addr, size, 0, &sc->sc_ioh) != 0) {
 		aprint_error(": couldn't map registers\n");
 		return;
 	}
+#else
+	sc->sc_ioh = addr;
+#endif
 
 	aprint_naive("\n");
 	aprint_normal(": DesignWare USB3 XHCI");
@@ -330,6 +343,7 @@ dwc3_fdt_attach(device_t parent, device_t self, void *aux)
 	dwc3_fdt_enable_phy(sc, dwc3_phandle, rev);
 	dwc3_fdt_set_mode(sc, GCTL_PRTCAP_HOST);
 
+#ifndef SEL4 //SEL4: interrupts handled by coreplatform
 	if (!fdtbus_intr_str(dwc3_phandle, 0, intrstr, sizeof(intrstr))) {
 		aprint_error_dev(self, "failed to decode interrupt\n");
 		return;
@@ -343,6 +357,7 @@ dwc3_fdt_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 	aprint_normal_dev(self, "interrupting on %s\n", intrstr);
+#endif
 
 	sc->sc_bus.ub_revision = USBREV_3_0;
 	error = xhci_init(sc);
@@ -351,7 +366,9 @@ dwc3_fdt_attach(device_t parent, device_t self, void *aux)
 		return;
 	}
 
-	sc->sc_child = config_found(self, &sc->sc_bus, usbctlprint, CFARGS_NONE);
-	sc->sc_child2 = config_found(self, &sc->sc_bus2, usbctlprint,
+#ifndef SEL4 //USB attach done in xhci_stub
+	sc->sc_child = config_found(self, &sc->sc_bus, NULL, CFARGS_NONE);
+	sc->sc_child2 = config_found(self, &sc->sc_bus2, NULL,
 	    CFARGS_NONE);
+#endif
 }

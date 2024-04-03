@@ -1,4 +1,4 @@
-/* $NetBSD: wsconsio.h,v 1.127 2024/01/20 00:23:12 jmcneill Exp $ */
+/* $NetBSD: wsconsio.h,v 1.126 2021/09/28 06:14:27 nia Exp $ */
 
 /*
  * Copyright (c) 1996, 1997 Christopher G. Demetriou.  All rights reserved.
@@ -46,7 +46,9 @@
 
 #include <sys/types.h>
 #include <sys/ioccom.h>
+#ifndef SEL4
 #include <sys/time.h>
+#endif
 #include <dev/wscons/wsksymvar.h>
 
 
@@ -56,7 +58,9 @@
 struct wscons_event {
 	u_int		type;
 	int		value;
+	#ifndef SEL4
 	struct timespec	time;
+	#endif
 };
 #define WSEVENT_VERSION	1
 
@@ -366,7 +370,6 @@ struct wsmouse_parameters {
 #define	WSDISPLAY_TYPE_PLATINUM	64	/* onboard fb in PowerMac 7200 */
 #define	WSDISPLAY_TYPE_PLFB	65	/* ARM PrimeCell PL11x */
 #define	WSDISPLAY_TYPE_SSDFB	66	/* ssdfb(4) */
-#define	WSDISPLAY_TYPE_HOLLYWOOD 67	/* Nintendo Wii "Hollywood" SoC */
 
 /* Basic display information.  Not applicable to all display types. */
 struct wsdisplay_fbinfo {
@@ -650,7 +653,6 @@ struct wsdisplayio_edid_info {
 #define WSFB_CI		1	/* colour indexed, see subtype */
 #define WSFB_GREYSCALE	2
 #define WSFB_YUV	3
-#define WSFB_YUY2	4
 
 struct wsdisplayio_fbinfo {
 	uint64_t fbi_fbsize;		/* framebuffer size in bytes */

@@ -70,6 +70,7 @@ __KERNEL_RCSID(0, "$NetBSD: ofw_subr.c,v 1.60 2022/01/22 11:49:18 thorpej Exp $"
 #include <sys/device_calls.h>
 
 #include <dev/ofw/openfirm.h>
+#include <stdio.h>
 
 #define	OFW_MAX_STACK_BUF_SIZE	256
 #define	OFW_PATH_BUF_SIZE	512
@@ -82,6 +83,7 @@ static device_call_t
 of_devhandle_lookup_device_call(devhandle_t handle, const char *name,
     devhandle_t *call_handlep)
 {
+#ifndef SEL4
 	__link_set_decl(of_device_calls, struct device_call_descriptor);
 	struct device_call_descriptor * const *desc;
 
@@ -90,6 +92,7 @@ of_devhandle_lookup_device_call(devhandle_t handle, const char *name,
 			return (*desc)->call;
 		}
 	}
+#endif
 	return NULL;
 }
 
@@ -139,8 +142,10 @@ of_device_enumerate_children(device_t dev, devhandle_t call_handle, void *v)
 
 	return 0;
 }
+#ifndef SEL4
 OF_DEVICE_CALL_REGISTER(DEVICE_ENUMERATE_CHILDREN_STR,
 			of_device_enumerate_children)
+#endif
 
 /*
  * int of_decode_int(p)
@@ -461,6 +466,7 @@ of_getnode_byname(int start, const char *target)
 	return node;
 }
 
+#ifndef SEL4
 /*
  * Create a uint32_t integer property from an OFW node property.
  */
@@ -494,6 +500,7 @@ of_to_dataprop(prop_dictionary_t dict, int node, const char *ofname,
 
 	return prop_dictionary_set_data(dict, propname, prop, len);
 }
+#endif
 
 /*
  * look at output-device, see if there's a Sun-typical video mode specifier as

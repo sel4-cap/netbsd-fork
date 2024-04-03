@@ -67,8 +67,31 @@ __KERNEL_RCSID(0, "$NetBSD: xhci.c,v 1.180 2023/07/20 11:59:04 riastradh Exp $")
 #include <dev/usb/xhcireg.h>
 #include <dev/usb/xhcivar.h>
 #include <dev/usb/usbroothub.h>
+#include <pipe_methods.h>
+#include <sys/errno.h>
+#include <xhci_api.h>
+#include <shared_ringbuffer.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <dev/scsipi/scsiconf.h>
+
+int umass_id = 0;
+
+extern uintptr_t usb_new_device_free;
+extern uintptr_t usb_new_device_used;
+
+/* Pointers to shared_ringbuffers */
+extern ring_handle_t *usb_new_device_ring;
 
 
+extern uintptr_t xhci_root_intr_pointer;
+extern uintptr_t device_ctrl_pointer;
+
+// DEVELOPMENT {{{
+#define device_has_power(d) 1
+#define DELAY(ms) ms_delay(ms)
+#define snprintb(...) 0
+// }}}
 #ifdef USB_DEBUG
 #ifndef XHCI_DEBUG
 #define xhcidebug 0
@@ -142,7 +165,9 @@ struct xhci_pipe {
 static usbd_status xhci_open(struct usbd_pipe *);
 static void xhci_close_pipe(struct usbd_pipe *);
 static int xhci_intr1(struct xhci_softc * const);
+#ifndef SEL4
 static void xhci_softintr(void *);
+#endif
 static void xhci_poll(struct usbd_bus *);
 static struct usbd_xfer *xhci_allocx(struct usbd_bus *, unsigned int);
 static void xhci_freex(struct usbd_bus *, struct usbd_xfer *);
@@ -159,7 +184,9 @@ static void xhci_pipe_restart_async_task(void *);
 static void xhci_pipe_restart_async(struct usbd_pipe *);
 
 static usbd_status xhci_configure_endpoint(struct usbd_pipe *);
-//static usbd_status xhci_unconfigure_endpoint(struct usbd_pipe *);
+#ifndef SEL4
+static usbd_status xhci_unconfigure_endpoint(struct usbd_pipe *);
+#endif
 static void xhci_reset_endpoint(struct usbd_pipe *);
 static usbd_status xhci_stop_endpoint_cmd(struct xhci_softc *,
     struct xhci_slot *, u_int, uint32_t);
@@ -226,7 +253,7 @@ static void xhci_device_bulk_abort(struct usbd_xfer *);
 static void xhci_device_bulk_close(struct usbd_pipe *);
 static void xhci_device_bulk_done(struct usbd_xfer *);
 
-static const struct usbd_bus_methods xhci_bus_methods = {
+static struct usbd_bus_methods xhci_bus_methods = {
 	.ubm_open = xhci_open,
 	.ubm_softint = xhci_softintr,
 	.ubm_dopoll = xhci_poll,
@@ -239,7 +266,7 @@ static const struct usbd_bus_methods xhci_bus_methods = {
 	.ubm_rhctrl = xhci_roothub_ctrl,
 };
 
-static const struct usbd_pipe_methods xhci_root_intr_methods = {
+static struct usbd_pipe_methods xhci_root_intr_methods = {
 	.upm_transfer = xhci_root_intr_transfer,
 	.upm_start = xhci_root_intr_start,
 	.upm_abort = xhci_root_intr_abort,
@@ -249,7 +276,7 @@ static const struct usbd_pipe_methods xhci_root_intr_methods = {
 };
 
 
-static const struct usbd_pipe_methods xhci_device_ctrl_methods = {
+static struct usbd_pipe_methods xhci_device_ctrl_methods = {
 	.upm_transfer = xhci_device_ctrl_transfer,
 	.upm_start = xhci_device_ctrl_start,
 	.upm_abort = xhci_device_ctrl_abort,
@@ -258,7 +285,7 @@ static const struct usbd_pipe_methods xhci_device_ctrl_methods = {
 	.upm_done = xhci_device_ctrl_done,
 };
 
-static const struct usbd_pipe_methods xhci_device_isoc_methods = {
+static struct usbd_pipe_methods xhci_device_isoc_methods = {
 	.upm_transfer = xhci_device_isoc_transfer,
 	.upm_abort = xhci_device_isoc_abort,
 	.upm_close = xhci_device_isoc_close,
@@ -266,7 +293,7 @@ static const struct usbd_pipe_methods xhci_device_isoc_methods = {
 	.upm_done = xhci_device_isoc_done,
 };
 
-static const struct usbd_pipe_methods xhci_device_bulk_methods = {
+static struct usbd_pipe_methods xhci_device_bulk_methods = {
 	.upm_transfer = xhci_device_bulk_transfer,
 	.upm_start = xhci_device_bulk_start,
 	.upm_abort = xhci_device_bulk_abort,
@@ -275,7 +302,7 @@ static const struct usbd_pipe_methods xhci_device_bulk_methods = {
 	.upm_done = xhci_device_bulk_done,
 };
 
-static const struct usbd_pipe_methods xhci_device_intr_methods = {
+static struct usbd_pipe_methods xhci_device_intr_methods = {
 	.upm_transfer = xhci_device_intr_transfer,
 	.upm_start = xhci_device_intr_start,
 	.upm_abort = xhci_device_intr_abort,
@@ -283,6 +310,59 @@ static const struct usbd_pipe_methods xhci_device_intr_methods = {
 	.upm_cleartoggle = xhci_noop,
 	.upm_done = xhci_device_intr_done,
 };
+
+struct usbd_pipe_methods *get_device_methods() {
+	return &xhci_device_ctrl_methods;
+}
+
+struct usbd_pipe_methods *get_root_intr_methods() {
+	return &xhci_root_intr_methods;
+}
+
+
+struct usbd_pipe_methods *get_device_intr_methods() {
+	return &xhci_device_intr_methods;
+}
+
+struct usbd_pipe_methods *get_device_bulk_methods() {
+	return &xhci_device_bulk_methods;
+}
+
+struct usbd_bus_methods *get_bus_methods() {
+	return &xhci_bus_methods;
+}
+
+struct usbd_pipe_methods *get_up_methods(int method_ptr) {
+	switch (method_ptr) {
+		case ROOTHUB_CTRL:
+			return &roothub_ctrl_methods;
+		case XHCI_ROOT_INTR:
+			return &xhci_root_intr_methods;
+		case XHCI_DEVICE_CTRL:
+			return &xhci_device_ctrl_methods;
+		case XHCI_DEVICE_ISOC:
+			return &xhci_device_isoc_methods;
+		case XHCI_DEVICE_BULK:
+			return &xhci_device_bulk_methods;
+		case XHCI_DEVICE_INTR:
+			return &xhci_device_intr_methods;
+		default:
+			return 0;
+	}
+}
+
+
+// SEL4: debug
+uint32_t xhci_read_print_4(bus_space_tag_t tag, bus_space_handle_t bsh, bus_size_t size){
+    uint32_t busval = bus_space_read_4(tag, bsh, size);
+    printf("xhci: Read4: Handle: %lx, Offset: %lx. Result: %08x\n", bsh, size, busval);
+    return busval;
+}
+
+void xhci_write_print_4(bus_space_tag_t tag, bus_space_handle_t bsh, bus_size_t size, uint32_t val){
+    printf("xhci: Wrte4: Handle: %lx, Offset: %lx.  Value: %08x\n", bsh, size, val);
+    bus_space_write_4(tag, bsh, size, val);
+}
 
 static inline uint32_t
 xhci_read_1(const struct xhci_softc * const sc, bus_size_t offset)
@@ -611,6 +691,7 @@ xhci_childdet(device_t self, device_t child)
 int
 xhci_detach(struct xhci_softc *sc, int flags)
 {
+#ifndef SEL4
 	int rv = 0;
 
 	if (sc->sc_child2 != NULL) {
@@ -666,6 +747,9 @@ xhci_detach(struct xhci_softc *sc, int flags)
 	pool_cache_destroy(sc->sc_xferpool);
 
 	return rv;
+#else
+	return 0;
+#endif
 }
 
 int
@@ -700,7 +784,9 @@ xhci_suspend(device_t self, const pmf_qual_t *qual)
 	 */
 	mutex_enter(&sc->sc_lock);
 	KASSERT(sc->sc_suspender == NULL);
+#ifndef SEL4
 	sc->sc_suspender = curlwp;
+#endif
 	while (sc->sc_command_addr != 0)
 		cv_wait(&sc->sc_cmdbusy_cv, &sc->sc_lock);
 	mutex_exit(&sc->sc_lock);
@@ -899,7 +985,9 @@ out:	mutex_exit(&sc->sc_rhlock);
 		 * and make it fail instead.
 		 */
 		mutex_enter(&sc->sc_lock);
+#ifndef SEL4
 		KASSERT(sc->sc_suspender == curlwp);
+#endif
 		sc->sc_suspender = NULL;
 		sc->sc_suspendresume_failed = true;
 		cv_broadcast(&sc->sc_cmdbusy_cv);
@@ -924,11 +1012,13 @@ xhci_resume(device_t self, const pmf_qual_t *qual)
 	 * things worse, probably.
 	 */
 	mutex_enter(&sc->sc_lock);
+#ifndef SEL4
 	if (sc->sc_suspendresume_failed) {
 		KASSERT(sc->sc_suspender == NULL);
 		sc->sc_suspender = curlwp;
 		sc->sc_suspendresume_failed = false;
 	}
+#endif
 	KASSERT(sc->sc_suspender);
 	mutex_exit(&sc->sc_lock);
 
@@ -1626,6 +1716,7 @@ xhci_init(struct xhci_softc *sc)
 		goto bad;
 	}
 
+#ifndef SEL4 //xferpool not implemented, just get mem from heap
 	sc->sc_xferpool = pool_cache_init(sizeof(struct xhci_xfer), 0, 0, 0,
 	    "xhcixfer", NULL, IPL_USB, NULL, NULL, NULL);
 	if (sc->sc_xferpool == NULL) {
@@ -1634,6 +1725,7 @@ xhci_init(struct xhci_softc *sc)
 		rv = ENOMEM;
 		goto bad;
 	}
+#endif
 
 	cv_init(&sc->sc_command_cv, "xhcicmd");
 	cv_init(&sc->sc_cmdbusy_cv, "xhcicmdq");
@@ -1667,10 +1759,12 @@ xhci_init(struct xhci_softc *sc)
 	return 0;
 
  bad:
+#ifndef SEL4 //xferpool not implemented
 	if (sc->sc_xferpool) {
 		pool_cache_destroy(sc->sc_xferpool);
 		sc->sc_xferpool = NULL;
 	}
+#endif
 
 	if (sc->sc_slots) {
 		kmem_free(sc->sc_slots, sizeof(*sc->sc_slots) *
@@ -1732,10 +1826,12 @@ xhci_intr(void *v)
 		 * One of child busses could be already detached. It doesn't
 		 * matter on which of the two the softintr is scheduled.
 		 */
+#ifndef SEL4 //hardintr handled in hardware_interrupts.c
 		if (sc->sc_child)
 			usb_schedsoftintr(&sc->sc_bus);
 		else
 			usb_schedsoftintr(&sc->sc_bus2);
+#endif
 	}
 done:
 	mutex_spin_exit(&sc->sc_intr_lock);
@@ -1856,7 +1952,7 @@ xhci_configure_endpoint(struct usbd_pipe *pipe)
 {
 	struct xhci_softc * const sc = XHCI_PIPE2SC(pipe);
 	struct xhci_slot * const xs = pipe->up_dev->ud_hcpriv;
-#ifdef USB_DEBUG
+#if defined(USB_DEBUG) || defined(SEL4_USB_DEBUG)
 	const u_int dci = xhci_ep_get_dci(pipe->up_endpoint->ue_edesc);
 #endif
 	struct xhci_soft_trb trb;
@@ -2052,7 +2148,7 @@ xhci_open(struct usbd_pipe *pipe)
 			pipe->up_methods = &roothub_ctrl_methods;
 			break;
 		case UE_DIR_IN | USBROOTHUB_INTR_ENDPT:
-			pipe->up_methods = &xhci_root_intr_methods;
+			pipe->up_methods = (struct usbd_pipe_methods*) xhci_root_intr_pointer;
 			break;
 		default:
 			pipe->up_methods = NULL;
@@ -2644,7 +2740,7 @@ xhci_handle_event(struct xhci_softc * const sc,
 	}
 }
 
-static void
+void
 xhci_softintr(void *v)
 {
 	struct usbd_bus * const bus = v;
@@ -2734,7 +2830,11 @@ xhci_allocx(struct usbd_bus *bus, unsigned int nframes)
 	ntrbs = uimax(3, nframes);
 	const size_t trbsz = sizeof(*xx->xx_trb) * ntrbs;
 
+#ifndef SEL4
 	xx = pool_cache_get(sc->sc_xferpool, PR_WAITOK);
+#else
+	xx = kmem_zalloc(sizeof(struct xhci_xfer), KM_SLEEP); //! this probably needs to change
+#endif
 	if (xx != NULL) {
 		memset(xx, 0, sizeof(*xx));
 		if (ntrbs > 0) {
@@ -2770,7 +2870,9 @@ xhci_freex(struct usbd_bus *bus, struct usbd_xfer *xfer)
 		xx->xx_trb = NULL;
 		xx->xx_ntrb = 0;
 	}
+#ifndef SEL4
 	pool_cache_put(sc->sc_xferpool, xx);
+#endif
 }
 
 static bool
@@ -2933,7 +3035,7 @@ xhci_new_device(device_t parent, struct usbd_bus *bus, int depth,
 		}
 
 		/* Allow device time to set new address */
-		usbd_delay_ms(dev, USB_SET_ADDRESS_SETTLE);
+		usbd_delay_ms(dev, USB_SET_ADDRESS_SETTLE * 50); //SEL4: device needs more time to settle
 
 		usb_syncmem(&xs->xs_dc_dma, 0, sc->sc_pgsz, BUS_DMASYNC_POSTREAD);
 		cp = xhci_slot_get_dcv(sc, xs, XHCI_DCI_SLOT);
@@ -2979,6 +3081,7 @@ xhci_new_device(device_t parent, struct usbd_bus *bus, int depth,
 		    UGETW(dev->ud_ep0desc.wMaxPacketSize));
 		if (err) {
 			DPRINTFN(1, "update mps of ep0 %ju", err, 0, 0, 0);
+			printf("failed to update mps of endpoint\n");
 			goto bad;
 		}
 	}
@@ -3004,6 +3107,27 @@ xhci_new_device(device_t parent, struct usbd_bus *bus, int depth,
 
 	if (depth == 0 && port == 0) {
 		usbd_attach_roothub(parent, dev);
+
+		// Notify shell of root hub
+		struct sel4_usb_device* sel4_dev = malloc(sizeof(struct sel4_usb_device));
+		dev->sel4_dev_id = num_devices++;
+		sel4_dev->id = dev->sel4_dev_id;
+		sel4_dev->vendor = malloc(strlen(dev->ud_vendor+1));
+		sel4_dev->product = malloc(strlen(dev->ud_product+1));
+		sel4_dev->class = (int)dev->ud_ddesc.bDeviceClass;
+		strncpy(sel4_dev->vendor, dev->ud_vendor, strlen(dev->ud_vendor) + 1);
+		strncpy(sel4_dev->product, dev->ud_product, strlen(dev->ud_product) + 1);
+		sel4_dev->speed = (int)dev->ud_speed;
+		sel4_dev->depth = (int)dev->ud_depth;
+		sel4_dev->protocol = dd->bDeviceProtocol;
+		sel4_dev->mps = UGETW(dev->ud_ep0desc.wMaxPacketSize);
+		sel4_dev->len = dd->bLength;
+		sel4_dev->num_configs = dd->bNumConfigurations;
+		sel4_dev->rev = UGETW(dd->bcdUSB);
+		bool empty = ring_empty(usb_new_device_ring->used_ring);
+		int error = enqueue_used(usb_new_device_ring, (uintptr_t) sel4_dev, sizeof(sel4_dev), (void *)0);
+		if (empty)
+			microkit_notify(NEW_DEVICE_EVENT);
 		DPRINTFN(1, "root hub %#jx", (uintptr_t)dev, 0, 0, 0);
 		return USBD_NORMAL_COMPLETION;
 	}
@@ -3014,6 +3138,62 @@ xhci_new_device(device_t parent, struct usbd_bus *bus, int depth,
 		if (depth == 0 && port == 0 && dev->ud_pipe0)
 			usbd_kill_pipe(dev->ud_pipe0);
 		usbd_remove_device(dev, up);
+	} else {
+		struct sel4_usb_device* sel4_dev = malloc(sizeof(struct sel4_usb_device));
+
+		dev->sel4_dev_id = num_devices++;
+		sel4_dev->id = (int)dev->sel4_dev_id;
+		sel4_dev->vendor = malloc((sizeof(dev->ud_vendor)));
+		sel4_dev->product = malloc(sizeof(dev->ud_product));
+		sel4_dev->serial = malloc(sizeof(dev->ud_serial));
+		sel4_dev->class = (int)dev->ud_ddesc.bDeviceClass;
+		sel4_dev->subclass = (int)dev->ud_ddesc.bDeviceSubClass;
+		char* unknown = "unknown";
+		if (!dev->ud_vendor)
+			strncpy(sel4_dev->vendor, unknown, strlen(unknown));
+		else
+			strncpy(sel4_dev->vendor, dev->ud_vendor, strlen(dev->ud_vendor) + 1);
+		if (!dev->ud_product)
+			strncpy(sel4_dev->product, unknown, strlen(unknown));
+		else
+			strncpy(sel4_dev->product, dev->ud_product, strlen(dev->ud_product) + 1);
+		if (!dev->ud_serial)
+			strncpy(sel4_dev->serial, unknown, strlen(unknown));
+		else
+			strncpy(sel4_dev->serial, dev->ud_serial, strlen(dev->ud_serial) + 1);
+		sel4_dev->vendorid = (int)UGETW(dev->ud_ddesc.idVendor);
+		sel4_dev->productid = (int)UGETW(dev->ud_ddesc.idProduct);
+		sel4_dev->ifaceClass = dev->ud_ifaces[0].ui_idesc->bInterfaceClass;
+		sel4_dev->ifaceSub = dev->ud_ifaces[0].ui_idesc->bInterfaceSubClass;
+		sel4_dev->speed = (int)dev->ud_speed;
+		sel4_dev->depth = depth;
+		sel4_dev->protocol = dd->bDeviceProtocol;
+		sel4_dev->mps = UGETW(dev->ud_ep0desc.wMaxPacketSize);
+		sel4_dev->len = dd->bLength;
+		sel4_dev->num_configs = dd->bNumConfigurations;
+		sel4_dev->rev = UGETW(dd->bcdUSB);
+		// Notify shell of new device
+		if (sel4_dev->ifaceClass == 0x08) {
+			//mass storage dev
+			sel4_dev->umass_dev = malloc(sizeof(struct sel4_umass_device));
+			sel4_dev->umass_dev->umass_id = umass_id;
+			sel4_dev->umass_dev->locked = false;
+
+			sel4_dev->umass_dev->dev_info.blocks = get_umass_blocks(umass_id);
+			sel4_dev->umass_dev->dev_info.cylinders = get_umass_cyls(umass_id);
+			sel4_dev->umass_dev->dev_info.heads = get_umass_heads(umass_id);
+			sel4_dev->umass_dev->dev_info.blocksize = get_umass_blocksize(umass_id);
+			sel4_dev->umass_dev->dev_info.size = get_umass_size(umass_id);
+			if (!dev->ud_serial)
+				strncpy(sel4_dev->umass_dev->dev_info.serial_number, unknown, strlen(unknown));
+			else
+				strncpy(sel4_dev->umass_dev->dev_info.serial_number, dev->ud_serial, 64);
+			umass_id++;
+		}
+		bool empty = ring_empty(usb_new_device_ring->used_ring);
+		int error = enqueue_used(usb_new_device_ring, (uintptr_t) sel4_dev, sizeof(sel4_dev), (void *)0);
+		if (empty)
+			microkit_notify(NEW_DEVICE_EVENT);
 	}
 
 	return err;
@@ -3242,9 +3422,11 @@ xhci_do_command_locked(struct xhci_softc * const sc,
 	KASSERTMSG(!cpu_intr_p() && !cpu_softintr_p(), "called from intr ctx");
 	KASSERT(mutex_owned(&sc->sc_lock));
 
+#ifndef SEL4
 	while (sc->sc_command_addr != 0 ||
 	    (sc->sc_suspender != NULL && sc->sc_suspender != curlwp))
 		cv_wait(&sc->sc_cmdbusy_cv, &sc->sc_lock);
+#endif
 	if (sc->sc_suspendresume_failed)
 		return USBD_IOERROR;
 
@@ -3265,6 +3447,7 @@ xhci_do_command_locked(struct xhci_softc * const sc,
 
 	xhci_db_write_4(sc, XHCI_DOORBELL(0), 0);
 
+#ifndef SEL4
 	while (sc->sc_resultpending) {
 		if (cv_timedwait(&sc->sc_command_cv, &sc->sc_lock,
 		    MAX(1, mstohz(timeout))) == EWOULDBLOCK) {
@@ -3273,6 +3456,9 @@ xhci_do_command_locked(struct xhci_softc * const sc,
 			goto timedout;
 		}
 	}
+#endif
+
+	usb_delay_ms(0, USBD_TIMEOUT); // added for cv_timedwait
 
 	trb->trb_0 = sc->sc_result_trb.trb_0;
 	trb->trb_2 = sc->sc_result_trb.trb_2;
@@ -3289,6 +3475,7 @@ xhci_do_command_locked(struct xhci_softc * const sc,
 	case 192 ... 223:
 		DPRINTFN(5, "error %#jx",
 		    XHCI_TRB_2_ERROR_GET(trb->trb_2), 0, 0, 0);
+		printf("XHCI ERROR %#lx\n", XHCI_TRB_2_ERROR_GET(trb->trb_2));
 		err = USBD_IOERROR;
 		break;
 	case 224 ... 255:
@@ -3696,7 +3883,7 @@ xhci_setup_route(struct usbd_pipe *pipe, uint32_t *cp)
 				goto found;
 			}
 		}
-		panic("%s: cannot find HS port", __func__);
+		printf("%s: cannot find HS port", __func__);
 	found:
 		DPRINTFN(4, "high speed port %jd", p, 0, 0, 0);
 	} else {
@@ -4495,8 +4682,8 @@ xhci_device_ctrl_start(struct usbd_xfer *xfer)
 	xhci_db_write_4(sc, XHCI_DOORBELL(xs->xs_idx), dci);
 
 out:	if (xfer->ux_status == USBD_NOT_STARTED) {
-		usbd_xfer_schedule_timeout(xfer);
 		xfer->ux_status = USBD_IN_PROGRESS;
+		usbd_xfer_schedule_timeout(xfer); //SEL4 order changed (NECESSARY)
 	} else {
 		/*
 		 * We must be coming from xhci_pipe_restart -- timeout
@@ -4675,7 +4862,7 @@ xhci_device_isoc_close(struct usbd_pipe *pipe)
 static void
 xhci_device_isoc_done(struct usbd_xfer *xfer)
 {
-#ifdef USB_DEBUG
+#if defined(USB_DEBUG) || defined(SEL4)
 	struct xhci_slot * const xs = xfer->ux_pipe->up_dev->ud_hcpriv;
 	const u_int dci = xhci_ep_get_dci(xfer->ux_pipe->up_endpoint->ue_edesc);
 #endif
@@ -4782,7 +4969,7 @@ out:	if (xfer->ux_status == USBD_NOT_STARTED) {
 static void
 xhci_device_bulk_done(struct usbd_xfer *xfer)
 {
-#ifdef USB_DEBUG
+#if defined USB_DEBUG || SEL4_USB_DEBUG
 	struct xhci_slot * const xs = xfer->ux_pipe->up_dev->ud_hcpriv;
 	const u_int dci = xhci_ep_get_dci(xfer->ux_pipe->up_endpoint->ue_edesc);
 #endif
@@ -4894,7 +5081,7 @@ static void
 xhci_device_intr_done(struct usbd_xfer *xfer)
 {
 	struct xhci_softc * const sc __diagused = XHCI_XFER2SC(xfer);
-#ifdef USB_DEBUG
+#if defined USB_DEBUG || SEL4_USB_DEBUG
 	struct xhci_slot * const xs = xfer->ux_pipe->up_dev->ud_hcpriv;
 	const u_int dci = xhci_ep_get_dci(xfer->ux_pipe->up_endpoint->ue_edesc);
 #endif

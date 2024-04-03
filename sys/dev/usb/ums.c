@@ -1,4 +1,4 @@
-/*	$NetBSD: ums.c,v 1.106 2024/03/18 15:15:27 jakllsch Exp $	*/
+/*	$NetBSD: ums.c,v 1.104 2023/07/20 20:00:34 mrg Exp $	*/
 
 /*
  * Copyright (c) 1998, 2017 The NetBSD Foundation, Inc.
@@ -35,7 +35,7 @@
  */
 
 #include <sys/cdefs.h>
-__KERNEL_RCSID(0, "$NetBSD: ums.c,v 1.106 2024/03/18 15:15:27 jakllsch Exp $");
+__KERNEL_RCSID(0, "$NetBSD: ums.c,v 1.104 2023/07/20 20:00:34 mrg Exp $");
 
 #ifdef _KERNEL_OPT
 #include "opt_usb.h"
@@ -48,10 +48,10 @@ __KERNEL_RCSID(0, "$NetBSD: ums.c,v 1.106 2024/03/18 15:15:27 jakllsch Exp $");
 #include <sys/ioctl.h>
 #include <sys/file.h>
 #include <sys/select.h>
-#include <sys/sysctl.h>
 #include <sys/proc.h>
 #include <sys/vnode.h>
 #include <sys/poll.h>
+#include <sys/kmem.h>
 
 #include <dev/usb/usb.h>
 #include <dev/usb/usbhid.h>
@@ -65,6 +65,16 @@ __KERNEL_RCSID(0, "$NetBSD: ums.c,v 1.106 2024/03/18 15:15:27 jakllsch Exp $");
 #include <dev/hid/hid.h>
 #include <dev/hid/hidms.h>
 
+#ifdef UMS_DEBUG
+#define DPRINTF(x)	if (umsdebug) printf x
+#define DPRINTFN(n,x)	if (umsdebug>(n)) printf x
+int	umsdebug = 0;
+#else
+#define DPRINTF(x)
+#define DPRINTFN(n,x)
+#endif
+
+#ifndef SEL4
 #ifdef USB_DEBUG
 #ifndef UMS_DEBUG
 #define umsdebug 0
@@ -116,6 +126,7 @@ fail:
 				USBHIST_CALLARGSN(umsdebug,N,FMT,A,B,C,D)
 
 #define UMSUNIT(s)	(minor(s))
+#endif
 
 struct ums_softc {
 	struct uhidev *sc_hdev;
@@ -128,16 +139,22 @@ struct ums_softc {
 	char	sc_dying;
 };
 
+#ifndef SEL4
 Static void ums_intr(void *, void *, u_int);
+#endif
 
 Static int	ums_enable(void *);
+#ifndef SEL4
 Static void	ums_disable(void *);
 Static int	ums_ioctl(void *, u_long, void *, int, struct lwp *);
+#endif
 
 static const struct wsmouse_accessops ums_accessops = {
 	ums_enable,
+#ifndef SEL4
 	ums_ioctl,
 	ums_disable,
+#endif
 };
 
 static int ums_match(device_t, cfdata_t, void *);
@@ -160,9 +177,12 @@ ums_match(device_t parent, cfdata_t match, void *aux)
 	 * Some (older) Griffin PowerMate knobs may masquerade as a
 	 * mouse, avoid treating them as such, they have only one axis.
 	 */
-	if (uha->uiaa->uiaa_vendor == USB_VENDOR_GRIFFIN &&
-	    uha->uiaa->uiaa_product == USB_PRODUCT_GRIFFIN_POWERMATE)
-		return UMATCH_NONE;
+    if (uha->uiaa) { //SEL4: added uiaa check to avoid crash
+        if (uha->uiaa->uiaa_vendor == USB_VENDOR_GRIFFIN &&
+                uha->uiaa->uiaa_product == USB_PRODUCT_GRIFFIN_POWERMATE) {
+            return UMATCH_NONE;
+        }
+    }
 
 	uhidev_get_report_desc(uha->parent, &desc, &size);
 	if (!hid_is_collection(desc, size, uha->reportid,
@@ -170,7 +190,7 @@ ums_match(device_t parent, cfdata_t match, void *aux)
 	    !hid_is_collection(desc, size, uha->reportid,
 			       HID_USAGE2(HUP_GENERIC_DESKTOP, HUG_POINTER)) &&
 	    !hid_is_collection(desc, size, uha->reportid,
-			       HID_USAGE2(HUP_DIGITIZERS, HUD_PEN)))
+			       HID_USAGE2(HUP_DIGITIZERS, 0x0002)))
 		return UMATCH_NONE;
 
 	return UMATCH_IFACECLASS;
@@ -224,7 +244,6 @@ ums_attach(device_t parent, device_t self, void *aux)
 			fixpos = 24;
 			break;
 		case USB_PRODUCT_MICROSOFT_24GHZ_XCVR80:
-		case USB_PRODUCT_MICROSOFT_24GHZ_XCVR90:
 			fixpos = 40;
 			woffset = sc->sc_ms.hidms_loc_z.size;
 			break;
@@ -246,7 +265,9 @@ ums_attach(device_t parent, device_t self, void *aux)
 		}
 	}
 
+#ifndef SEL4
 	tpcalib_init(&sc->sc_ms.sc_tpcalib);
+#endif
 
 	/* calibrate the pointer if it reports absolute events */
 	if (sc->sc_ms.flags & HIDMS_ABS) {
@@ -272,14 +293,16 @@ ums_attach(device_t parent, device_t self, void *aux)
 			}
 			hid_end_parse(d);
 		}
+#ifndef SEL4
         	tpcalib_ioctl(&sc->sc_ms.sc_tpcalib, WSMOUSEIO_SCALIBCOORDS,
         	    (void *)&sc->sc_ms.sc_calibcoords, 0, 0);
+#endif
 	}
 
 	hidms_attach(self, &sc->sc_ms, &ums_accessops);
-
+	ums_enable(sc); //SEL4: moved out to enble mouse
 	if (sc->sc_alwayson) {
-		error = uhidev_open(sc->sc_hdev, &ums_intr, sc);
+		error = uhidev_open(sc->sc_hdev, intr_ptrs->ums, sc);
 		if (error != 0) {
 			aprint_error_dev(self,
 			    "WARNING: couldn't open always-on device\n");
@@ -317,23 +340,21 @@ ums_detach(device_t self, int flags)
 	struct ums_softc *sc = device_private(self);
 	int rv = 0;
 
-	UMSHIST_FUNC();
-	UMSHIST_CALLARGS("ums_detach: sc=%qd flags=%qd\n",
-	    (uintptr_t)sc, flags, 0, 0);
+	DPRINTF(("ums_detach: sc=%p flags=%d\n", sc, flags));
 
 	if (sc->sc_alwayson)
 		uhidev_close(sc->sc_hdev);
 
 	/* No need to do reference counting of ums, wsmouse has all the goo. */
-	if (sc->sc_ms.hidms_wsmousedev != NULL)
-		rv = config_detach(sc->sc_ms.hidms_wsmousedev, flags);
+	/* if (sc->sc_ms.hidms_wsmousedev != NULL) */
+	/* 	rv = config_detach(sc->sc_ms.hidms_wsmousedev, flags); */
 
 	pmf_device_deregister(self);
 
 	return rv;
 }
 
-Static void
+void
 ums_intr(void *cookie, void *ibuf, u_int len)
 {
 	struct ums_softc *sc = cookie;
@@ -348,7 +369,7 @@ ums_enable(void *v)
 	struct ums_softc *sc = v;
 	int error = 0;
 
-	UMSHIST_FUNC(); UMSHIST_CALLARGS("sc=%jx\n", (uintptr_t)sc, 0, 0, 0);
+	DPRINTFN(1,("ums_enable: sc=%p\n", sc));
 
 	if (sc->sc_dying)
 		return EIO;
@@ -360,7 +381,7 @@ ums_enable(void *v)
 	sc->sc_ms.hidms_buttons = 0;
 
 	if (!sc->sc_alwayson) {
-		error = uhidev_open(sc->sc_hdev, &ums_intr, sc);
+		error = uhidev_open(sc->sc_hdev, intr_ptrs->ums, sc);
 		if (error)
 			sc->sc_enabled = 0;
 	}
@@ -368,12 +389,13 @@ ums_enable(void *v)
 	return error;
 }
 
+#ifndef SEL4
 Static void
 ums_disable(void *v)
 {
 	struct ums_softc *sc = v;
 
-	UMSHIST_FUNC(); UMSHIST_CALLARGS("sc=%jx\n", (uintptr_t)sc, 0, 0, 0);
+	DPRINTFN(1,("ums_disable: sc=%p\n", sc));
 
 #ifdef DIAGNOSTIC
 	if (!sc->sc_enabled) {
@@ -415,3 +437,4 @@ ums_ioctl(void *v, u_long cmd, void *data, int flag,
 
 	return EPASSTHROUGH;
 }
+#endif
