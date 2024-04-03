@@ -1,4 +1,4 @@
-.\"	$NetBSD: exports.5,v 1.36 2024/03/27 13:11:14 uwe Exp $
+.\"	$NetBSD: exports.5,v 1.39 2024/03/29 22:50:27 uwe Exp $
 .\"
 .\" Copyright (c) 1989, 1991, 1993
 .\"	The Regents of the University of California.  All rights reserved.
@@ -70,7 +70,7 @@ or
 Warning:
 Exporting a directory exposes the
 .Em entire
-content of the filesystem that the directory lives in to
+contents of the filesystem that the directory lives in to
 .Tn NFS
 clients.
 .Ef
@@ -155,7 +155,7 @@ on the local machine
 .Pc .
 The user may be specified by name or number.
 .Sm off
-.It Fl maproot Li = Ar user\^ Li \&: Ar group1\^ Li \&: group2\^ Li \&: Ar ...
+.It Fl maproot Li = Ar user\^ Li \&: Op Ar group1\^ Li \&: group2\^ Li \&: Ar ...
 .Sm on
 The colon separated list is used to specify the precise credential
 to be used for remote access by root.
@@ -167,13 +167,13 @@ should be used to distinguish a credential containing no groups from a
 complete credential for that user.
 .Sm off
 .It Fl mapall Li = Ar user
-.It Fl mapall Li = Ar user\^ Li \&: Ar group1\^ Li \&: Ar group2\^ Li \&: Ar ...
+.It Fl mapall Li = Ar user\^ Li \&: Op Ar group1\^ Li \&: Ar group2\^ Li \&: Ar ...
 .Sm on
 Mapping for all client uids (including root)
 using the same semantics as
 .Fl maproot .
 .It Fl r Ar user
-.It Fl r Ar user\^ Ns Li \&: Ns Ar group1\^ Ns Li \&: Ns Ar group2\^ Ns Li \&: Ns Ar ...
+.It Fl r Ar user\^ Ns Li \&: Ns Op Ar group1\^ Ns Li \&: Ns Ar group2\^ Ns Li \&: Ns Ar ...
 Synonym for
 .Fl maproot ,
 for compatibility with older export file formats.
@@ -312,7 +312,7 @@ A, B or C; see
 .Xr inet 4
 .Pc .
 .Pp
-Scoped IPv6 address must carry scope identifier as documented in
+Scoped IPv6 address must carry a scope identifier as documented in
 .Xr inet6 4 .
 For example,
 .Ql fe80::%ne2/10
@@ -338,11 +338,11 @@ The default remote mount-point file.
 .Pp
 If you have modified the
 .Pa /etc/exports
-file, send the mountd a
+file, send the mountd process a
 .Dv SIGHUP
 to make it re-read it:
 .Pp
-.Dl "kill -HUP $(cat /var/run/mountd.pid)" .
+.Dl "kill -HUP $(cat /var/run/mountd.pid)"
 .Sh EXAMPLES
 .Bd -literal -offset indent
 /usr /usr/local -maproot=0:10 friends
@@ -408,7 +408,7 @@ directory within
 .Pa /u2
 and mapping all uids to credentials for the principal
 that is authenticated by a Kerberos ticket.
-.Pq Sy Kerberos not implemented .
+.Pq Sy Kerberos not implemented.
 .It Pa /a
 is exported to the network
 .Ql 192.168.0.0 ,
