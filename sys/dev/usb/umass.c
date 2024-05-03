@@ -123,6 +123,7 @@
  * umass_cam_cb again to complete the CAM command.
  */
 
+#include "dev/usb/xhcivar.h"
 #include <sys/cdefs.h>
 __KERNEL_RCSID(0, "$NetBSD: umass.c,v 1.189 2022/09/22 14:27:52 riastradh Exp $");
 
@@ -133,6 +134,7 @@ __KERNEL_RCSID(0, "$NetBSD: umass.c,v 1.189 2022/09/22 14:27:52 riastradh Exp $"
 //#include "atapibus.h"
 //#include "scsibus.h"
 
+typedef __WCHAR_TYPE__ wchar_t;
 #include <sys/param.h>
 #include <sys/buf.h>
 #include <sys/conf.h>
@@ -158,9 +160,6 @@ __KERNEL_RCSID(0, "$NetBSD: umass.c,v 1.189 2022/09/22 14:27:52 riastradh Exp $"
 #include <dev/scsipi/scsipi_all.h>
 #include <dev/scsipi/scsipiconf.h>
 #include <stdio.h>
-
-extern struct umass_wire_methods *umass_bbb_methods_pointer;
-extern struct umass_wire_methods *umass_bbb_methods_pointer_other;
 
 SDT_PROBE_DEFINE1(usb, umass, device, attach__start,
     "struct umass_softc *"/*sc*/);
@@ -798,7 +797,7 @@ umass_attach(device_t parent, device_t self, void *aux)
 	/* Initialise the wire protocol specific methods */
 	switch (sc->sc_wire) {
 	case UMASS_WPROTO_BBB:
-		sc->sc_methods = &umass_bbb_methods;
+		sc->sc_methods = UMASS_BBB;
 		break;
 	case UMASS_WPROTO_CBI:
 	case UMASS_WPROTO_CBI_I:
@@ -1010,7 +1009,7 @@ umass_setup_transfer(struct umass_softc *sc, struct usbd_pipe *pipe,
 
 	/* Initialise a USB transfer and then schedule it */
 
-	if(sc->sc_methods == umass_bbb_methods_pointer_other || sc->sc_methods == umass_bbb_methods_pointer ) {
+    if(sc->sc_methods == UMASS_BBB) {
 		usbd_setup_xfer(xfer, sc, buffer, buflen, flags, sc->timeout,
 	   		intr_ptrs->umass_wire_state);
 	} else {

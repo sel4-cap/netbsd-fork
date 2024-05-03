@@ -80,12 +80,10 @@ __KERNEL_RCSID(0, "$NetBSD: umass_scsipi.c,v 1.70 2021/12/31 14:24:16 riastradh 
 #include <microkit.h>
 #include <stdio.h>
 #include <shared_ringbuffer.h>
+#include <dev/usb/xhcivar.h>
 #include <xhci_api.h>
 
 extern blk_queue_handle_t *umass_buffer_ring;
-
-extern struct umass_wire_methods *umass_bbb_methods_pointer;
-extern struct umass_wire_methods *umass_bbb_methods_pointer_other;
 
 struct umass_scsipi_softc {
 	struct umassbus_softc	base;
@@ -351,10 +349,7 @@ umass_scsipi_request(struct scsipi_channel *chan,
 		} else {
 			DPRINTFM(UDMASS_SCSI, "async dir=%jd, cmdlen=%jd"
 			    " datalen=%jd", dir, cmdlen, xs->datalen, 0);
-			if(sc->sc_methods == umass_bbb_methods_pointer_other) {
-				sc->sc_methods = umass_bbb_methods_pointer;
-			}
-			sc->sc_methods->wire_xfer(sc, periph->periph_lun, cmd,
+			get_sc_methods(sc->sc_methods)->wire_xfer(sc, periph->periph_lun, cmd,
 						  cmdlen, xs->data,
 						  xs->datalen, dir,
 						  xs->timeout, 0,

@@ -311,25 +311,19 @@ static struct usbd_pipe_methods xhci_device_intr_methods = {
 	.upm_done = xhci_device_intr_done,
 };
 
-struct usbd_pipe_methods *get_device_methods() {
-	return &xhci_device_ctrl_methods;
-}
-
-struct usbd_pipe_methods *get_root_intr_methods() {
-	return &xhci_root_intr_methods;
-}
-
-
-struct usbd_pipe_methods *get_device_intr_methods() {
-	return &xhci_device_intr_methods;
-}
-
-struct usbd_pipe_methods *get_device_bulk_methods() {
-	return &xhci_device_bulk_methods;
-}
-
 struct usbd_bus_methods *get_bus_methods() {
 	return &xhci_bus_methods;
+}
+
+struct umass_wire_methods *get_sc_methods(int sc_ptr) {
+	switch (sc_ptr) {
+		case UMASS_BBB:
+			return get_umass_bbb_methods();
+		default:
+            printf("FATAL xhci.c: wire method %d unsupported. Hanging...\n", sc_ptr);
+            while (1) {}
+			return 0;
+	}
 }
 
 struct usbd_pipe_methods *get_up_methods(int method_ptr) {
@@ -347,6 +341,8 @@ struct usbd_pipe_methods *get_up_methods(int method_ptr) {
 		case XHCI_DEVICE_INTR:
 			return &xhci_device_intr_methods;
 		default:
+            printf("FATAL xhci.c: usb pipe method %d unsupported. Hanging...\n", method_ptr);
+            while (1) {}
 			return 0;
 	}
 }
@@ -2145,10 +2141,10 @@ xhci_open(struct usbd_pipe *pipe)
 	if (dev->ud_depth == 0 && dev->ud_powersrc->up_portno == 0) {
 		switch (ed->bEndpointAddress) {
 		case USB_CONTROL_ENDPOINT:
-			pipe->up_methods = &roothub_ctrl_methods;
+			pipe->up_methods = ROOTHUB_CTRL;
 			break;
 		case UE_DIR_IN | USBROOTHUB_INTR_ENDPT:
-			pipe->up_methods = (struct usbd_pipe_methods*) xhci_root_intr_pointer;
+			pipe->up_methods = XHCI_ROOT_INTR;
 			break;
 		default:
 			pipe->up_methods = NULL;
@@ -2164,18 +2160,18 @@ xhci_open(struct usbd_pipe *pipe)
 
 	switch (xfertype) {
 	case UE_CONTROL:
-		pipe->up_methods = &xhci_device_ctrl_methods;
+		pipe->up_methods = XHCI_DEVICE_CTRL;
 		break;
 	case UE_ISOCHRONOUS:
-		pipe->up_methods = &xhci_device_isoc_methods;
+		pipe->up_methods = XHCI_DEVICE_ISOC;
 		pipe->up_serialise = false;
 		xpipe->xp_isoc_next = -1;
 		break;
 	case UE_BULK:
-		pipe->up_methods = &xhci_device_bulk_methods;
+		pipe->up_methods = XHCI_DEVICE_BULK;
 		break;
 	case UE_INTERRUPT:
-		pipe->up_methods = &xhci_device_intr_methods;
+		pipe->up_methods = XHCI_DEVICE_INTR;
 		break;
 	default:
 		return USBD_IOERROR;

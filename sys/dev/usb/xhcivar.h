@@ -175,11 +175,25 @@ void	xhci_childdet(device_t, device_t);
 bool	xhci_suspend(device_t, const pmf_qual_t *);
 bool	xhci_resume(device_t, const pmf_qual_t *);
 #endif
-struct usbd_pipe_methods * 	get_root_intr_methods();
-struct usbd_pipe_methods * 	get_device_methods();
-struct usbd_pipe_methods * 	get_device_intr_methods();
-struct usbd_pipe_methods * get_device_bulk_methods();
+
+enum p_methods {
+    ROOTHUB_CTRL,
+    XHCI_ROOT_INTR,
+    XHCI_DEVICE_CTRL,
+    XHCI_DEVICE_ISOC,
+    XHCI_DEVICE_BULK,
+    XHCI_DEVICE_INTR
+};
+
+enum sc_methods{
+    UMASS_BBB
+};
+
+//from umass
+struct umass_wire_methods *get_umass_bbb_methods();
+
 struct usbd_pipe_methods 	*get_up_methods(int);
+struct umass_wire_methods 	*get_sc_methods(int);
 struct usbd_bus_methods 	*get_bus_methods();
 void xhci_softintr(void *);
 bool	xhci_shutdown(device_t, int);

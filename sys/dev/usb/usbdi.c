@@ -64,19 +64,12 @@ __KERNEL_RCSID(0, "$NetBSD: usbdi.c,v 1.247 2022/09/13 10:32:58 riastradh Exp $"
 #include <stdio.h>
 
 #include <dev/usb/umassvar.h>
+#include <dev/usb/xhcivar.h>
 
 #define try bool __HadError=false;
 #define catch(x) ExitJmp:if(__HadError)
 #define throw(x) {__HadError=true;goto ExitJmp;}
 
-extern struct usbd_pipe_methods *xhci_root_intr_pointer;
-extern struct usbd_pipe_methods *xhci_root_intr_pointer_other;
-extern struct usbd_pipe_methods *device_ctrl_pointer;
-extern struct usbd_pipe_methods *device_ctrl_pointer_other;
-extern struct usbd_pipe_methods *device_intr_pointer;
-extern struct usbd_pipe_methods *device_intr_pointer_other;
-extern struct usbd_pipe_methods *device_bulk_pointer;
-extern struct usbd_pipe_methods *device_bulk_pointer_other;
 extern struct usbd_bus_methods *xhci_bus_methods_ptr;
 extern bool pipe_thread;
 
@@ -461,17 +454,7 @@ usbd_transfer(struct usbd_xfer *xfer)
 		}
 		if (err)
 			break;
-		if (pipe->up_methods == xhci_root_intr_pointer_other) {
-            aprint_verbose("switch context root intr (upm_transfer)\n");
-            pipe->up_methods = xhci_root_intr_pointer;
-        } else if (pipe->up_methods == device_ctrl_pointer_other) {
-            aprint_verbose("switch context device (upm_transfer)\n");
-            pipe->up_methods = device_ctrl_pointer;
-        } else if (pipe->up_methods == device_bulk_pointer_other) {
-		aprint_verbose("switch context device bulk\n");
-		pipe->up_methods = device_bulk_pointer;
-		}
-		err = pipe->up_methods->upm_transfer(xfer);
+		err = get_up_methods((int)pipe->up_methods)->upm_transfer(xfer);
 	} while (0);
 	SDT_PROBE3(usb, device, pipe, transfer__done,  pipe, xfer, err);
 
@@ -1219,22 +1202,9 @@ usb_transfer_complete(struct usbd_xfer *xfer)
 
 	SDT_PROBE2(usb, device, xfer, done,  xfer, xfer->ux_status);
 	// context switch
-    if (pipe->up_methods == xhci_root_intr_pointer_other) {
-        aprint_verbose("switch context root intr\n");
-        pipe->up_methods = xhci_root_intr_pointer;
-    } else if (pipe->up_methods == device_ctrl_pointer_other) {
-        aprint_verbose("switch context device\n");
-		pipe->up_methods = device_ctrl_pointer;
-	} else if (pipe->up_methods == device_intr_pointer_other) {
-		aprint_verbose("switch context device intr\n");
-		pipe->up_methods = device_intr_pointer;
-	} else if (pipe->up_methods == device_bulk_pointer_other) {
-		aprint_verbose("switch context device bulk\n");
-		pipe->up_methods = device_bulk_pointer;
-	}
 	USBHIST_LOG(usbdebug, "xfer %#jx doing done %#jx", (uintptr_t)xfer,
 		(uintptr_t)pipe->up_methods->upm_done, 0, 0);
-    pipe->up_methods->upm_done(xfer);
+    get_up_methods((int)pipe->up_methods)->upm_done(xfer);
 
 	if (xfer->ux_length != 0 && xfer->ux_buffer != xfer->ux_buf) {
 		KDASSERTMSG(xfer->ux_actlen <= xfer->ux_length,
@@ -1313,7 +1283,7 @@ usbd_start_next(struct usbd_pipe *pipe)
 		pipe->up_running = 0;
 	} else {
 		SDT_PROBE2(usb, device, pipe, start,  pipe, xfer);
-		err = pipe->up_methods->upm_start(xfer);
+		err = get_up_methods(pipe->up_methods)->upm_start(xfer);
 
 		if (err != USBD_IN_PROGRESS) {
 			USBHIST_LOG(usbdebug, "error = %jd", err, 0, 0, 0);
