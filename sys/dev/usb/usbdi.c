@@ -1203,7 +1203,7 @@ usb_transfer_complete(struct usbd_xfer *xfer)
 	SDT_PROBE2(usb, device, xfer, done,  xfer, xfer->ux_status);
 	// context switch
 	USBHIST_LOG(usbdebug, "xfer %#jx doing done %#jx", (uintptr_t)xfer,
-		(uintptr_t)pipe->up_methods->upm_done, 0, 0);
+		(uintptr_t)get_up_methods((int)pipe->up_methods)->upm_done, 0, 0);
     get_up_methods((int)pipe->up_methods)->upm_done(xfer);
 
 	if (xfer->ux_length != 0 && xfer->ux_buffer != xfer->ux_buf) {

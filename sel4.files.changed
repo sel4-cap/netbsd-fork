@@ -1,0 +1,134 @@
+# files tabbed are new files
+common/lib/libc/stdlib/heapsort.c
+sys/arch/aarch64/include/cpu.h
+sys/arch/aarch64/include/types.h
+sys/arch/arm/include/bus_defs.h
+sys/arch/arm/include/bus_funcs.h
+sys/arch/arm/include/int_const.h
+sys/arch/arm/include/int_fmtio.h
+sys/arch/arm/include/mutex.h
+sys/arch/arm/include/types.h
+sys/arch/arm/include/wchar_limits.h
+sys/arch/arm/nxp/imx8mq_usbphy.c
+sys/dev/dev_verbose.c
+sys/dev/dksubr.c
+sys/dev/dkvar.h
+sys/dev/fdt/dwc3_fdt.c
+sys/dev/fdt/fdt_subr.c
+sys/dev/fdt/fdtvar.h
+sys/dev/hid/hid.h
+sys/dev/hid/hidkbdmap.c
+sys/dev/hid/hidms.c
+sys/dev/ofw/ofw_subr.c
+sys/dev/ofw/openfirm.h
+sys/dev/scsipi/scsi_base.c
+sys/dev/scsipi/scsi_subr.c
+sys/dev/scsipi/scsiconf.c
+sys/dev/scsipi/scsiconf.h
+sys/dev/scsipi/scsipi_base.c
+sys/dev/scsipi/scsipi_ioctl.c
+sys/dev/scsipi/scsipiconf.c
+sys/dev/scsipi/scsipiconf.h
+sys/dev/scsipi/sd.c
+sys/dev/scsipi/sdvar.h
+	sys/dev/usb/atapibus.h
+	sys/dev/usb/scsibus.h
+sys/dev/usb/uhid.c
+sys/dev/usb/uhidev.c
+sys/dev/usb/uhub.c
+	sys/dev/usb/uhub.h
+sys/dev/usb/ukbd.c
+sys/dev/usb/umass.c
+sys/dev/usb/umass_scsipi.c
+sys/dev/usb/umassvar.h
+sys/dev/usb/ums.c
+sys/dev/usb/usb.c
+sys/dev/usb/usb.h
+sys/dev/usb/usb_mem.c
+sys/dev/usb/usb_mem.h
+sys/dev/usb/usb_quirks.c
+sys/dev/usb/usb_quirks.h
+sys/dev/usb/usb_subr.c
+sys/dev/usb/usbdi.c
+sys/dev/usb/usbdi.h
+sys/dev/usb/usbdi_util.c
+sys/dev/usb/usbdivar.h
+sys/dev/usb/usbhist.h
+sys/dev/usb/usbroothub.c
+sys/dev/usb/umass_quirks.c
+sys/dev/usb/umass_quirks.h
+sys/dev/usb/usbroothub.h
+sys/dev/usb/uts.c
+sys/dev/usb/xhci.c
+sys/dev/usb/xhcivar.h
+sys/dev/wscons/tpcalib.c
+sys/dev/wscons/wsconsio.h
+sys/dev/wscons/wsksymvar.h
+sys/external/bsd/libfdt/dist/fdt.c
+sys/external/bsd/libfdt/dist/fdt_addresses.c
+sys/external/bsd/libfdt/dist/libfdt_env.h
+sys/kern/kern_pmf.c
+sys/kern/subr_autoconf.c
+sys/kern/subr_humanize.c
+sys/kern/subr_disk.c
+sys/lib/libkern/hexdump.c
+sys/lib/libkern/libkern.h
+sys/lib/libkern/pmatch.c
+sys/lib/libkern/strlist.c
+sys/lib/libkern/strlist.h
+	sys/prop/Makefile
+	sys/prop/plistref.h
+	sys/prop/prop_array.h
+	sys/prop/prop_bool.h
+	sys/prop/prop_data.h
+	sys/prop/prop_dictionary.h
+	sys/prop/prop_ingest.h
+	sys/prop/prop_number.h
+	sys/prop/prop_object.h
+	sys/prop/prop_string.h
+	sys/prop/proplib.h
+sys/sys/ansi.h
+sys/sys/atomic.h
+	sys/sys/bswap64.c
+sys/sys/buf.h
+sys/sys/bufq.h
+sys/sys/bus.h
+sys/sys/callout.h
+sys/sys/cdefs.h
+	sys/sys/cdefs_helper.h
+sys/sys/common_ansi.h
+sys/sys/common_int_limits.h
+sys/sys/condvar.h
+sys/sys/conf.h
+sys/sys/cpu.h
+sys/sys/device.h
+sys/sys/device_if.h
+sys/sys/device_impl.h
+sys/sys/disk.h
+sys/sys/disklabel.h
+sys/sys/errno.h
+sys/sys/fstypes.h
+sys/sys/intr.h
+sys/sys/inttypes.h
+sys/sys/kernel.h
+sys/sys/kernhist.h
+sys/sys/kmem.h
+sys/sys/kthread.h
+sys/sys/lwp.h
+sys/sys/malloc.h
+sys/sys/mutex.h
+sys/sys/once.h
+sys/sys/param.h
+sys/sys/pmf.h
+sys/sys/proc.h
+sys/sys/rndsource.h
+sys/sys/sdt.h
+sys/sys/select.h
+sys/sys/sigtypes.h
+sys/sys/stat.h
+sys/sys/systm.h
+sys/sys/time.h
+	sys/sys/time_types.h
+sys/sys/types.h
+sys/sys/uio.h
+sys/sys/vnode.h
