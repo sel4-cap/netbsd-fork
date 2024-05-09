@@ -541,8 +541,8 @@ ukbd_attach(device_t parent, device_t self, void *aux)
 	sc->sc_leds_set = 0;	/* not explicitly set by wskbd yet */
 	callout_reset(&sc->sc_ledreset, mstohz(400), ukbd_delayed_leds_off,
 	    sc);
-	ms_delay(400);
 #ifndef SEL4
+	ms_delay(400);
 	ukbd_delayed_leds_off(&sc);
 #endif
 
