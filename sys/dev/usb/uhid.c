@@ -190,13 +190,12 @@ uhid_attach(device_t parent, device_t self, void *aux)
 	int size, repid;
 	void *desc;
 
-#ifndef SEL4
 	sc->sc_dev = self;
 	sc->sc_hdev = uha->parent;
 	sc->sc_udev = uha->uiaa->uiaa_device;
 	sc->sc_report_id = uha->reportid;
 
-	selinit(&sc->sc_rsel);
+	// selinit(&sc->sc_rsel);
 
 	uhidev_get_report_desc(uha->parent, &desc, &size);
 	repid = uha->reportid;
@@ -211,11 +210,10 @@ uhid_attach(device_t parent, device_t self, void *aux)
 	       sc->sc_isize, sc->sc_osize, sc->sc_fsize);
 
 	mutex_init(&sc->sc_lock, MUTEX_DEFAULT, IPL_SOFTUSB);
-	cv_init(&sc->sc_cv, "uhidrea");
+	// cv_init(&sc->sc_cv, "uhidrea");
 
 	if (!pmf_device_register(self, NULL, NULL))
 		aprint_error_dev(self, "couldn't establish power handler\n");
-#endif
 
 	return;
 }

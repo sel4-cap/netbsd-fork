@@ -227,7 +227,7 @@ hidms_attach(device_t self, struct hidms *ms,
 #ifdef HIDMS_DEBUG
 	int i;
 #endif
-	aprint_normal(": %d button%s%s%s%s%s%s%s%s%s\n",
+	aprint_normal(": %d button%s%s%s%s%s%s%s\n",
 	    ms->nbuttons, ms->nbuttons == 1 ? "" : "s",
 	    ms->flags & HIDMS_W ? ", W" : "",
 	    ms->flags & HIDMS_Z ? " and Z dir" : "",
@@ -256,6 +256,7 @@ hidms_attach(device_t self, struct hidms *ms,
 	}
 #endif
 
+    printf("here now\n");
 	a.accessops = ops;
 	a.accesscookie = device_private(self);
 
