@@ -1207,6 +1207,7 @@ usbd_attachinterfaces(device_t parent, struct usbd_device *dev,
 	ilocs[USBIFIFCF_RELEASE] = uiaa.uiaa_release;
 	ilocs[USBIFIFCF_CONFIGURATION] = uiaa.uiaa_configno;
 
+    nifaces = 1;
 	for (i = 0; i < nifaces; i++) {
 		if (!ifaces[i]) {
 			DPRINTF("interface %jd claimed", i, 0, 0, 0);
